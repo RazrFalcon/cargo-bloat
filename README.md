@@ -2,6 +2,10 @@
 
 Find out what takes most of the space in your executable.
 
+Inspired by [google/bloaty](https://github.com/google/bloaty).
+
+*Note:* tested only under Linux but should work everywhere since we are using [object](https://github.com/gimli-rs/object) crate underneath.
+
 ### Install
 
 ```bash
@@ -52,6 +56,12 @@ Flags specific for `cargo-bloat`:
 -n NUM                  Number of lines to show [default: 20]
 -w, --wide              Do not trim long function names
 ```
+
+### Correctness
+
+The results are not perfect since function names parsing is not perfect.
+Also, all non-Rust methods are skipped during crates resolving which moves jemalloc
+and any other C libraries to the [Unknown] section.
 
 ### License
 
