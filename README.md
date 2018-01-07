@@ -1,29 +1,35 @@
 ## cargo-bloat
 
-Find out what takes most of the space in your executable. 
+Find out what takes most of the space in your executable.
+
+### Install
+
+```bash
+cargo install --force --git https://github.com/RazrFalcon/cargo-bloat.git
+```
 
 ### Usage
 
-Get list of biggest functions in the release build: 
+Get a list of biggest functions in the release build:
 
 ```
 % cargo bloat --release --trim-fn -n 10
     Finished release [optimized] target(s) in 0.2 secs
  93.3%  4.1MiB [8672 Others]
-  1.3% 57.6KiB <regex::exec::ExecNoSync<'c> as regex::re_trait::RegularExpression>::read_
+  1.3% 57.6KiB <regex::exec::ExecNoSync<'c> as regex::re_trait::RegularExpression>::read_captures_at
   0.8% 36.3KiB regex_syntax::parser::Parser::parse_expr
-  0.7% 30.1KiB <cargo::core::resolver::encode::_IMPL_DESERIALIZE_FOR_EncodableResolve::<i
-  0.7% 29.1KiB <cargo::util::toml::_IMPL_DESERIALIZE_FOR_TomlManifest::<impl serde::de::D
+  0.7% 30.1KiB <cargo::core::resolver::encode::_IMPL_DESERIALIZE_FOR_EncodableResolve::<impl serde::de::Deseria...
+  0.7% 29.1KiB <cargo::util::toml::_IMPL_DESERIALIZE_FOR_TomlManifest::<impl serde::de::Deserialize<'de> for ca...
   0.6% 27.2KiB cargo::util::toml::do_read_manifest
   0.5% 24.0KiB globset::GlobSet::new
   0.5% 23.7KiB cargo::core::resolver::encode::EncodableResolve::into_resolve
   0.5% 23.6KiB cargo::ops::cargo_rustc::compile_targets
-  0.5% 23.0KiB <cargo::util::toml::_IMPL_DESERIALIZE_FOR_TomlProject::<impl serde::de::De
+  0.5% 23.0KiB <cargo::util::toml::_IMPL_DESERIALIZE_FOR_TomlProject::<impl serde::de::Deserialize<'de> for car...
   0.5% 22.9KiB cargo::ops::cargo_rustc::job_queue::JobQueue::drain_the_queue
 100.0%  4.3MiB Total
 ```
 
-Get list of biggest dependencies:
+Get a list of biggest dependencies:
 ```
 % cargo bloat --release --crates -n 10
     Finished release [optimized] target(s) in 0.2 secs

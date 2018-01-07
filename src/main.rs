@@ -340,13 +340,15 @@ fn print_line(line: &Line, max_size_len: usize, term_width: Option<usize>) {
         size_s.insert(0, ' ');
     }
 
-    let name: &str = if let Some(term_width) = term_width {
-        let name_width = term_width - max_size_len - PERCENT_WIDTH - 4;
-        let name_width = cmp::min(name_width, line.name.len());
-        &line.name[..name_width]
-    } else {
-        &line.name
-    };
+    let mut name = line.name.clone();
+    if let Some(term_width) = term_width {
+        let name_width = term_width - max_size_len - PERCENT_WIDTH - 3;
+
+        if line.name.len() > name_width {
+            name.drain((name_width - 3)..);
+            name.push_str("...");
+        }
+    }
 
     println!("{}% {} {}", line.percent, size_s, name);
 }
