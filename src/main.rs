@@ -25,7 +25,7 @@ use cargo::{CliResult, Config};
 const PERCENT_WIDTH: usize = 5;
 
 const USAGE: &'static str = "
-Display a tree visualization of a dependency graph
+Find out what takes most of the space in your executable
 
 Usage: cargo bloat [options]
 
@@ -104,7 +104,7 @@ fn main() {
 
 fn real_main(flags: Flags, config: &mut Config) -> CliResult {
     if flags.flag_version {
-        println!("cargo-tree {}", env!("CARGO_PKG_VERSION"));
+        println!("cargo-bloat {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
 
