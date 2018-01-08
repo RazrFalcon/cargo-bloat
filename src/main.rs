@@ -305,6 +305,13 @@ fn print_crates(d: Data, crates: &[String], flags: &Flags) {
         });
     }
 
+    lines.push(Line {
+        percent: "100.0".into(),
+        size: format_size(d.total_size),
+        raw_size: d.total_size,
+        name: "Total".into(),
+    });
+
     let max_size_len = lines.iter().fold(0, |acc, ref v| cmp::max(acc, v.size.len()));
 
     for line in lines.iter() {

@@ -61,7 +61,9 @@ Flags specific for `cargo-bloat`:
 
 The results are not perfect since function names parsing is not perfect.
 Also, all non-Rust methods are skipped during crates resolving which moves jemalloc
-and any other C libraries to the [Unknown] section.
+and any other C libraries to the `[Unknown]` section.
+
+The *Total* section represents only the size of `.text` section, not a whole binary.
 
 ### License
 
