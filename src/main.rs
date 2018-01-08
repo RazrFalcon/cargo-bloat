@@ -37,7 +37,7 @@ Options:
     --release               Build artifacts in release mode, with optimizations
     --crates                Per crate bloatedness
     --trim-fn               Trim hash values from function names
-    -n NUM                  Number of lines to show [default: 20]
+    -n NUM                  Number of lines to show, 0 to show all [default: 20]
     -w, --wide              Do not trim long function names
     -v, --verbose           Use verbose output
     -q, --quiet             No output printed to stdout other than the tree
