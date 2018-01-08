@@ -148,7 +148,7 @@ fn process_bin(path: &path::Path, crates: &[String], flags: &Flags) {
 
     let mut total_size = 0;
     let mut list = Vec::new();
-    for symbol in file.symbols().chain(file.dynamic_symbols()) {
+    for symbol in file.symbol_map().symbols() {
         match symbol.kind() {
             SymbolKind::Section | SymbolKind::File => continue,
             _ => {}

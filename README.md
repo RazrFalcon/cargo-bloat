@@ -4,7 +4,7 @@ Find out what takes most of the space in your executable.
 
 Inspired by [google/bloaty](https://github.com/google/bloaty).
 
-**Note:** tested only under Linux but should work everywhere since we are using [object](https://github.com/gimli-rs/object) crate underneath.
+**Note:** Linux and macOS only.
 
 ### Install
 
