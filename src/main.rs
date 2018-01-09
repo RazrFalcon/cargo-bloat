@@ -35,6 +35,7 @@ Options:
     --features FEATURES     Space-separated list of features to also build
     --manifest-path PATH    Path to the manifest to analyze
     --release               Build artifacts in release mode, with optimizations
+    --example NAME          Build only the specified example
     --crates                Per crate bloatedness
     --trim-fn               Trim hash values from function names
     -n NUM                  Number of lines to show, 0 to show all [default: 20]
@@ -53,6 +54,7 @@ struct Flags {
     flag_features: Vec<String>,
     flag_manifest_path: Option<String>,
     flag_release: bool,
+    flag_example: Option<String>,
     flag_crates: bool,
     flag_trim_fn: bool,
     flag_n: usize,
@@ -127,9 +129,24 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
     let mut crates: Vec<String> = pkgs.package_ids().map(|p| p.name().replace("-", "_")).collect();
     crates.push("std".to_string());
 
+    let mut examples = Vec::new();
     let mut opt = ops::CompileOptions::default(&config, ops::CompileMode::Build);
     opt.features = &flags.flag_features;
     opt.release = flags.flag_release;
+
+    if let Some(ref name) = flags.flag_example {
+        examples.push(name.clone());
+
+        opt.filter = ops::CompileFilter::new(
+            false,
+            &[], false,
+            &[], false,
+            &examples[..], false,
+            &[], false,
+            false,
+        );
+    }
+
     let comp = ops::compile(&workspace, &opt)?;
 
     let mut is_processed = false;
