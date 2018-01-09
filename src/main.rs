@@ -162,9 +162,6 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
 }
 
 fn process_bin(path: &path::Path, crates: &[String], flags: &Flags) {
-    let pwd = env::current_dir().unwrap();
-    println!("File: {}", path.strip_prefix(&pwd).unwrap().to_str().unwrap());
-
     let file = fs::File::open(path).unwrap();
     let file = unsafe { memmap::Mmap::map(&file).unwrap() };
     let file = object::File::parse(&*file).unwrap();
