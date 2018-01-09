@@ -15,6 +15,7 @@ use std::collections::HashMap;
 
 use object::{Object, SectionKind, SymbolKind};
 
+use cargo::core::manifest;
 use cargo::core::shell::Shell;
 use cargo::core::Workspace;
 use cargo::ops;
@@ -40,7 +41,7 @@ Options:
     -n NUM                  Number of lines to show, 0 to show all [default: 20]
     -w, --wide              Do not trim long function names
     -v, --verbose           Use verbose output
-    -q, --quiet             No output printed to stdout other than the tree
+    -q, --quiet             No output printed to stdout
     --color WHEN            Coloring: auto, always, never
     --frozen                Require Cargo.lock and cache are up to date
     --locked                Require Cargo.lock is up to date
@@ -132,16 +133,38 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
     opt.release = flags.flag_release;
     let comp = ops::compile(&workspace, &opt)?;
 
-    if comp.binaries.is_empty() {
-        println!("No binaries are build.");
-    } else {
+    let cdylib_kind = manifest::TargetKind::Lib(vec![manifest::LibKind::Other("cdylib".to_string())]);
+
+    let mut is_processed = false;
+
+    'outer: for (_, lib) in comp.libraries {
+        for (target, path) in lib {
+            if target.kind() == &cdylib_kind {
+                process_bin(&path, &crates[..], &flags);
+
+                // The 'cdylib' can be defined only once, so exit immediately.
+                is_processed = true;
+                break 'outer;
+            }
+        }
+    }
+
+    if !comp.binaries.is_empty() {
         process_bin(&comp.binaries[0], &crates[..], &flags);
+        is_processed = true;
+    }
+
+    if !is_processed {
+        println!("Only 'bin' and 'cdylib' targets are supported.");
     }
 
     Ok(())
 }
 
 fn process_bin(path: &path::Path, crates: &[String], flags: &Flags) {
+    let pwd = env::current_dir().unwrap();
+    println!("File: {}", path.strip_prefix(&pwd).unwrap().to_str().unwrap());
+
     let file = fs::File::open(path).unwrap();
     let file = unsafe { memmap::Mmap::map(&file).unwrap() };
     let file = object::File::parse(&*file).unwrap();
