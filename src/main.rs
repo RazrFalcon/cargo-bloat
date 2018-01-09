@@ -84,6 +84,17 @@ struct Line {
     name: String,
 }
 
+impl Line {
+    fn new(percent: f64, size: u64, name: String) -> Self {
+        Line {
+            percent: format_percent(percent),
+            size: format_size(size),
+            raw_size: size,
+            name,
+        }
+    }
+}
+
 
 fn main() {
     env_logger::init().unwrap();
@@ -232,29 +243,22 @@ fn print_methods(mut d: Data, flags: &Flags) {
             }
         }
 
-        lines.push(Line {
-            percent: format_percent(percent),
-            size: format_size(sym.size),
-            raw_size: sym.size,
-            name: dem_name,
-        });
+        lines.push(Line::new(percent, sym.size, dem_name));
     }
 
-    lines.push(Line {
-        percent: format_percent(other_size as f64 / d.total_size as f64 * 100.0),
-        size: format_size(other_size),
-        raw_size: other_size,
-        name: format!("[{} Others]", d.symbols.len() - flags.flag_n),
-    });
+    lines.push(Line::new(
+        other_size as f64 / d.total_size as f64 * 100.0,
+        other_size,
+        format!("[{} Others]", d.symbols.len() - flags.flag_n),
+    ));
 
     lines.sort_by_key(|v| v.raw_size);
 
-    lines.insert(0, Line {
-        percent: "100.0".into(),
-        size: format_size(d.total_size),
-        raw_size: d.total_size,
-        name: "Total".into(),
-    });
+    lines.insert(0, Line::new(
+        100.0,
+        d.total_size,
+        "Total".to_string(),
+    ));
 
     let max_size_len = lines.iter().fold(0, |acc, ref v| cmp::max(acc, v.size.len()));
 
@@ -332,20 +336,10 @@ fn print_crates(d: Data, crates: &[String], flags: &Flags) {
     for &(k, v) in list.iter().rev().take(n) {
         let percent = *v as f64 / d.total_size as f64 as f64 * 100.0;
 
-        lines.push(Line {
-            percent: format_percent(percent),
-            size: format_size(*v),
-            raw_size: 0,
-            name: k.clone(),
-        });
+        lines.push(Line::new(percent, *v, k.clone()));
     }
 
-    lines.push(Line {
-        percent: "100.0".into(),
-        size: format_size(d.total_size),
-        raw_size: d.total_size,
-        name: "Total".into(),
-    });
+    lines.push(Line::new(100.0, d.total_size, "Total".to_string()));
 
     let max_size_len = lines.iter().fold(0, |acc, ref v| cmp::max(acc, v.size.len()));
 
