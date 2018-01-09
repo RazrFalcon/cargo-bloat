@@ -15,7 +15,6 @@ use std::collections::HashMap;
 
 use object::{Object, SectionKind, SymbolKind};
 
-use cargo::core::manifest;
 use cargo::core::shell::Shell;
 use cargo::core::Workspace;
 use cargo::ops;
@@ -133,13 +132,12 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
     opt.release = flags.flag_release;
     let comp = ops::compile(&workspace, &opt)?;
 
-    let cdylib_kind = manifest::TargetKind::Lib(vec![manifest::LibKind::Other("cdylib".to_string())]);
-
     let mut is_processed = false;
 
     'outer: for (_, lib) in comp.libraries {
-        for (target, path) in lib {
-            if target.kind() == &cdylib_kind {
+        for (_, path) in lib {
+            let path_str = path.to_str().unwrap();
+            if path_str.ends_with(".so") || path_str.ends_with(".dylib") {
                 process_bin(&path, &crates[..], &flags);
 
                 // The 'cdylib' can be defined only once, so exit immediately.
