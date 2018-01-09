@@ -133,7 +133,7 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
     let comp = ops::compile(&workspace, &opt)?;
 
     if comp.binaries.is_empty() {
-        println!("No binaries are build.");
+        println!("No binaries are built.");
     } else {
         process_bin(&comp.binaries[0], &crates[..], &flags);
     }
