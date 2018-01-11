@@ -43,6 +43,8 @@ Options:
     -h, --help              Print this message
     -V, --version           Print version info and exit
     --features FEATURES     Space-separated list of features to also build
+    --all-features          Build all available features
+    --no-default-features   Do not build the `default` feature
     --manifest-path PATH    Path to the manifest to analyze
     --release               Build artifacts in release mode, with optimizations
     --example NAME          Build only the specified example
@@ -63,6 +65,8 @@ Options:
 struct Flags {
     flag_version: bool,
     flag_features: Vec<String>,
+    flag_all_features: bool,
+    flag_no_default_features: bool,
     flag_manifest_path: Option<String>,
     flag_release: bool,
     flag_example: Option<String>,
@@ -177,6 +181,8 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
     let mut examples = Vec::new();
     let mut opt = ops::CompileOptions::default(&config, ops::CompileMode::Build);
     opt.features = &flags.flag_features;
+    opt.all_features = flags.flag_all_features;
+    opt.no_default_features = flags.flag_no_default_features;
     opt.release = flags.flag_release;
 
     if let Some(ref name) = flags.flag_example {
