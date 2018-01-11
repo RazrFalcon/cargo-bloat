@@ -403,6 +403,7 @@ fn print_header(max_size_len: usize) {
     let mut size_title = "Size".to_string();
     size_title.pad_left(max_size_len);
 
+    println!();
     println!("  File  .text {} Name", size_title);
 }
 
