@@ -37,7 +37,7 @@ Options:
     --release               Build artifacts in release mode, with optimizations
     --example NAME          Build only the specified example
     --crates                Per crate bloatedness
-    --trim-fn               Trim hash values from function names
+    --full-fn               Print full function name with hash values
     -n NUM                  Number of lines to show, 0 to show all [default: 20]
     -w, --wide              Do not trim long function names
     -v, --verbose           Use verbose output
@@ -56,7 +56,7 @@ struct Flags {
     flag_release: bool,
     flag_example: Option<String>,
     flag_crates: bool,
-    flag_trim_fn: bool,
+    flag_full_fn: bool,
     flag_n: usize,
     flag_wide: bool,
     flag_verbose: u32,
@@ -255,7 +255,7 @@ fn print_methods(mut d: Data, flags: &Flags) {
         let mut dem_name = rustc_demangle::demangle(sym.name).to_string();
 
         // crate::mod::fn::h5fbe0f2f0b5c7342 -> crate::mod::fn
-        if flags.flag_trim_fn {
+        if !flags.flag_full_fn {
             if let Some(pos) = dem_name.bytes().rposition(|b| b == b':') {
                 dem_name.drain((pos - 1)..);
             }
