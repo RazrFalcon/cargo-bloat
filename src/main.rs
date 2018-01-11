@@ -49,6 +49,7 @@ Options:
     --release               Build artifacts in release mode, with optimizations
     --example NAME          Build only the specified example
     --crates                Per crate bloatedness
+    --filter CRATE          Filter functions by crate
     --split-std             Split the 'std' crate to original crates like core, alloc, etc.
     --full-fn               Print full function name with hash values
     -n NUM                  Number of lines to show, 0 to show all [default: 20]
@@ -71,6 +72,7 @@ struct Flags {
     flag_release: bool,
     flag_example: Option<String>,
     flag_crates: bool,
+    flag_filter: Option<String>,
     flag_split_std: bool,
     flag_full_fn: bool,
     flag_n: usize,
@@ -272,11 +274,18 @@ fn print_methods(mut d: Data, flags: &Flags) {
 
     let n = if flags.flag_n == 0 { d.symbols.len() } else { flags.flag_n };
 
-    for sym in d.symbols.iter().rev().take(n) {
-        other_size -= sym.size;
+    for sym in d.symbols.iter().rev() {
         let percent_file = sym.size as f64 / d.file_size as f64 as f64 * 100.0;
         let percent_text = sym.size as f64 / d.text_size as f64 as f64 * 100.0;
         let mut dem_name = rustc_demangle::demangle(sym.name).to_string();
+
+        if let Some(ref name) = flags.flag_filter {
+            if !dem_name.contains(name) {
+                continue;
+            }
+        }
+
+        other_size -= sym.size;
 
         // crate::mod::fn::h5fbe0f2f0b5c7342 -> crate::mod::fn
         if !flags.flag_full_fn {
@@ -286,13 +295,18 @@ fn print_methods(mut d: Data, flags: &Flags) {
         }
 
         lines.push(Line::new(percent_file, percent_text, sym.size, dem_name));
+
+        if n != 0 && lines.len() == n {
+            break;
+        }
     }
 
+    let lines_len = lines.len();
     lines.push(Line::new(
         other_size as f64 / d.file_size as f64 * 100.0,
         other_size as f64 / d.text_size as f64 * 100.0,
         other_size,
-        format!("[{} Others]", d.symbols.len() - flags.flag_n),
+        format!("[{} Others]", d.symbols.len() - lines_len),
     ));
 
     lines.sort_by(|a, b| b.raw_size.cmp(&a.raw_size));
