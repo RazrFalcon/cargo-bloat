@@ -74,23 +74,39 @@ struct SymbolData<'a> {
 
 struct Data<'a> {
     symbols: Vec<SymbolData<'a>>,
-    total_size: u64,
+    file_size: u64,
+    text_size: u64,
 }
 
 struct Line {
-    percent: String,
+    percent_file: String,
+    percent_text: String,
     size: String,
     raw_size: u64,
     name: String,
 }
 
 impl Line {
-    fn new(percent: f64, size: u64, name: String) -> Self {
+    fn new(percent_file: f64, percent_text: f64, size: u64, name: String) -> Self {
         Line {
-            percent: format_percent(percent),
+            percent_file: format_percent(percent_file),
+            percent_text: format_percent(percent_text),
             size: format_size(size),
             raw_size: size,
             name,
+        }
+    }
+}
+
+
+trait PadLeft {
+    fn pad_left(&mut self, n: usize);
+}
+
+impl PadLeft for String {
+    fn pad_left(&mut self, n: usize) {
+        while self.len() < n {
+            self.insert(0, ' ');
         }
     }
 }
@@ -175,7 +191,7 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
         }
     }
 
-    if !comp.binaries.is_empty() {
+    if !is_processed && !comp.binaries.is_empty() {
         process_bin(&comp.binaries[0], &crates[..], &flags);
         is_processed = true;
     }
@@ -213,7 +229,8 @@ fn process_bin(path: &path::Path, crates: &[String], flags: &Flags) {
 
     let data = Data {
         symbols: list,
-        total_size,
+        file_size: fs::metadata(path).unwrap().len(),
+        text_size: total_size,
     };
 
     if flags.flag_crates {
@@ -227,13 +244,14 @@ fn print_methods(mut d: Data, flags: &Flags) {
     d.symbols.sort_by_key(|v| v.size);
 
     let mut lines: Vec<Line> = Vec::new();
-    let mut other_size = d.total_size;
+    let mut other_size = d.text_size;
 
     let n = if flags.flag_n == 0 { d.symbols.len() } else { flags.flag_n };
 
     for sym in d.symbols.iter().rev().take(n) {
         other_size -= sym.size;
-        let percent = sym.size as f64 / d.total_size as f64 as f64 * 100.0;
+        let percent_file = sym.size as f64 / d.file_size as f64 as f64 * 100.0;
+        let percent_text = sym.size as f64 / d.text_size as f64 as f64 * 100.0;
         let mut dem_name = rustc_demangle::demangle(sym.name).to_string();
 
         // crate::mod::fn::h5fbe0f2f0b5c7342 -> crate::mod::fn
@@ -243,34 +261,19 @@ fn print_methods(mut d: Data, flags: &Flags) {
             }
         }
 
-        lines.push(Line::new(percent, sym.size, dem_name));
+        lines.push(Line::new(percent_file, percent_text, sym.size, dem_name));
     }
 
     lines.push(Line::new(
-        other_size as f64 / d.total_size as f64 * 100.0,
+        other_size as f64 / d.file_size as f64 * 100.0,
+        other_size as f64 / d.text_size as f64 * 100.0,
         other_size,
         format!("[{} Others]", d.symbols.len() - flags.flag_n),
     ));
 
-    lines.sort_by_key(|v| v.raw_size);
+    lines.sort_by(|a, b| b.raw_size.cmp(&a.raw_size));
 
-    lines.insert(0, Line::new(
-        100.0,
-        d.total_size,
-        "Total".to_string(),
-    ));
-
-    let max_size_len = lines.iter().fold(0, |acc, ref v| cmp::max(acc, v.size.len()));
-
-    let term_width = if !flags.flag_wide {
-        term_size::dimensions().map(|v| v.0)
-    } else {
-        None
-    };
-
-    for line in lines.iter().rev() {
-        print_line(line, max_size_len, term_width);
-    }
+    print_table(d, lines, flags);
 }
 
 fn print_crates(d: Data, crates: &[String], flags: &Flags) {
@@ -334,25 +337,18 @@ fn print_crates(d: Data, crates: &[String], flags: &Flags) {
     let mut lines = Vec::new();
     let n = if flags.flag_n == 0 { list.len() } else { flags.flag_n };
     for &(k, v) in list.iter().rev().take(n) {
-        let percent = *v as f64 / d.total_size as f64 as f64 * 100.0;
+        let percent_file = *v as f64 / d.file_size as f64 as f64 * 100.0;
+        let percent_text = *v as f64 / d.text_size as f64 as f64 * 100.0;
 
-        lines.push(Line::new(percent, *v, k.clone()));
+        lines.push(Line::new(percent_file, percent_text, *v, k.clone()));
     }
 
-    lines.push(Line::new(100.0, d.total_size, "Total".to_string()));
-
-    let max_size_len = lines.iter().fold(0, |acc, ref v| cmp::max(acc, v.size.len()));
-
-    for line in lines.iter() {
-        print_line(line, max_size_len, None);
-    }
+    print_table(d, lines, flags);
 }
 
 fn format_percent(n: f64) -> String {
     let mut s = format!("{:.1}", n);
-    while s.len() < PERCENT_WIDTH {
-        s.insert(0, ' ');
-    }
+    s.pad_left(PERCENT_WIDTH);
 
     s
 }
@@ -370,15 +366,42 @@ fn format_size(bytes: u64) -> String {
     }
 }
 
+fn print_table(d: Data, mut lines: Vec<Line>, flags: &Flags) {
+    lines.push(Line::new(
+        d.text_size as f64 / d.file_size as f64 * 100.0,
+        100.0,
+        d.text_size,
+        format!(".text section size, the file size is {}", format_size(d.file_size))
+    ));
+
+    let term_width = if !flags.flag_wide {
+        term_size::dimensions().map(|v| v.0)
+    } else {
+        None
+    };
+
+    let max_size_len = lines.iter().fold(0, |acc, ref v| cmp::max(acc, v.size.len()));
+
+    print_header(max_size_len);
+    for line in lines.iter() {
+        print_line(line, max_size_len, term_width);
+    }
+}
+
+fn print_header(max_size_len: usize) {
+    let mut size_title = "Size".to_string();
+    size_title.pad_left(max_size_len);
+
+    println!("  File  .text {} Name", size_title);
+}
+
 fn print_line(line: &Line, max_size_len: usize, term_width: Option<usize>) {
     let mut size_s = line.size.clone();
-    while size_s.len() < max_size_len {
-        size_s.insert(0, ' ');
-    }
+    size_s.pad_left(max_size_len);
 
     let mut name = line.name.clone();
     if let Some(term_width) = term_width {
-        let name_width = term_width - max_size_len - PERCENT_WIDTH - 3;
+        let name_width = term_width - max_size_len - PERCENT_WIDTH * 2 - 6;
 
         if line.name.len() > name_width {
             name.drain((name_width - 3)..);
@@ -386,5 +409,5 @@ fn print_line(line: &Line, max_size_len: usize, term_width: Option<usize>) {
         }
     }
 
-    println!("{}% {} {}", line.percent, size_s, name);
+    println!("{}% {}% {} {}", line.percent_file, line.percent_text, size_s, name);
 }
