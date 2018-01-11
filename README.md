@@ -9,6 +9,12 @@ Inspired by [google/bloaty](https://github.com/google/bloaty).
 ### Install
 
 ```bash
+cargo install cargo-bloat
+```
+
+or
+
+```bash
 cargo install --force --git https://github.com/RazrFalcon/cargo-bloat.git
 ```
 
