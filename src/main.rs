@@ -24,6 +24,16 @@ use cargo::{CliResult, Config};
 
 const PERCENT_WIDTH: usize = 5;
 
+const STD_CRATES: &[&str] = &[
+    "core",
+    "std_unicode",
+    "alloc",
+    "alloc_system",
+    "unreachable",
+    "unwind",
+    "panic_unwind",
+];
+
 const USAGE: &'static str = "
 Find out what takes most of the space in your executable
 
@@ -37,6 +47,7 @@ Options:
     --release               Build artifacts in release mode, with optimizations
     --example NAME          Build only the specified example
     --crates                Per crate bloatedness
+    --split-std             Split the 'std' crate to original crates like core, alloc, etc.
     --full-fn               Print full function name with hash values
     -n NUM                  Number of lines to show, 0 to show all [default: 20]
     -w, --wide              Do not trim long function names
@@ -56,6 +67,7 @@ struct Flags {
     flag_release: bool,
     flag_example: Option<String>,
     flag_crates: bool,
+    flag_split_std: bool,
     flag_full_fn: bool,
     flag_n: usize,
     flag_wide: bool,
@@ -155,6 +167,12 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
 
     let mut crates: Vec<String> = pkgs.package_ids().map(|p| p.name().replace("-", "_")).collect();
     crates.push("std".to_string());
+    if flags.flag_split_std {
+        for crate_name in STD_CRATES {
+            crates.push(crate_name.to_string());
+        }
+    }
+    let crates = &crates[..];
 
     let mut examples = Vec::new();
     let mut opt = ops::CompileOptions::default(&config, ops::CompileMode::Build);
@@ -182,7 +200,7 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
         for (_, path) in lib {
             let path_str = path.to_str().unwrap();
             if path_str.ends_with(".so") || path_str.ends_with(".dylib") {
-                process_bin(&path, &crates[..], &flags);
+                process_bin(&path, crates, &flags);
 
                 // The 'cdylib' can be defined only once, so exit immediately.
                 is_processed = true;
@@ -192,7 +210,7 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
     }
 
     if !is_processed && !comp.binaries.is_empty() {
-        process_bin(&comp.binaries[0], &crates[..], &flags);
+        process_bin(&comp.binaries[0], crates, &flags);
         is_processed = true;
     }
 
@@ -303,17 +321,10 @@ fn print_crates(d: Data, crates: &[String], flags: &Flags) {
             crate_name = crate_name.split_whitespace().last().unwrap().to_owned();
         }
 
-        match crate_name.as_str() {
-              "core"
-            | "std_unicode"
-            | "alloc"
-            | "alloc_system"
-            | "unreachable"
-            | "unwind"
-            | "panic_unwind" => {
+        if !flags.flag_split_std {
+            if STD_CRATES.contains(&crate_name.as_str()) {
                 crate_name = "std".to_string();
             }
-            _ => {}
         }
 
         if crate_name != UNKNOWN && !crates.contains(&crate_name) {
