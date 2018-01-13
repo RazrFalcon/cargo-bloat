@@ -10,7 +10,10 @@ extern crate serde_derive;
 extern crate term_size;
 
 
-use std::{env, fs, cmp, path};
+mod table;
+
+
+use std::{env, fs, path};
 use std::collections::HashMap;
 
 use object::{Object, SectionKind, SymbolKind};
@@ -18,11 +21,12 @@ use object::{Object, SectionKind, SymbolKind};
 use cargo::core::shell::Shell;
 use cargo::core::Workspace;
 use cargo::ops;
+use cargo::util::errors::{CargoResult, CargoError};
 use cargo::util;
 use cargo::{CliResult, Config};
 
+use table::Table;
 
-const PERCENT_WIDTH: usize = 5;
 
 const STD_CRATES: &[&str] = &[
     "core",
@@ -85,61 +89,28 @@ struct Flags {
     #[serde(rename = "flag_Z")] flag_z: Vec<String>,
 }
 
-struct SymbolData<'a> {
-    name: &'a str,
+struct SymbolData {
+    name: String,
     size: u64,
 }
 
-struct Data<'a> {
-    symbols: Vec<SymbolData<'a>>,
+struct Data {
+    symbols: Vec<SymbolData>,
     file_size: u64,
     text_size: u64,
 }
 
-struct Line {
-    percent_file: String,
-    percent_text: String,
-    size: String,
-    raw_size: u64,
-    name: String,
-}
-
-impl Line {
-    fn new(percent_file: f64, percent_text: f64, size: u64, name: String) -> Self {
-        Line {
-            percent_file: format_percent(percent_file),
-            percent_text: format_percent(percent_text),
-            size: format_size(size),
-            raw_size: size,
-            name,
-        }
-    }
-}
-
-
-trait PadLeft {
-    fn pad_left(&mut self, n: usize);
-}
-
-impl PadLeft for String {
-    fn pad_left(&mut self, n: usize) {
-        while self.len() < n {
-            self.insert(0, ' ');
-        }
-    }
+struct CrateData {
+    data: Data,
+    crates: Vec<String>,
 }
 
 
 fn main() {
     env_logger::init().unwrap();
 
-    let mut config = match Config::default() {
-        Ok(cfg) => cfg,
-        Err(e) => {
-            let mut shell = Shell::new();
-            cargo::exit_with_error(e.into(), &mut shell)
-        }
-    };
+    let cwd = env::current_dir().expect("couldn't get the current directory of the process");
+    let mut config = create_config(cwd);
 
     let args: Vec<_> = env::args().collect();
     let result = cargo::call_main_without_stdin(real_main, &mut config, USAGE, &args, false);
@@ -149,12 +120,43 @@ fn main() {
     }
 }
 
+fn create_config(path: path::PathBuf) -> Config {
+    let shell = Shell::new();
+    let homedir = util::config::homedir(&path).expect(
+        "Cargo couldn't find your home directory. \
+         This probably means that $HOME was not set.");
+    Config::new(shell, path, homedir)
+}
+
 fn real_main(flags: Flags, config: &mut Config) -> CliResult {
     if flags.flag_version {
         println!("cargo-bloat {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
 
+    let crate_data = process_crate(&flags, config)?;
+
+    let mut table = Table::new(&["File", ".text", "Size", "Name"]);
+
+    let term_width = if !flags.flag_wide {
+        term_size::dimensions().map(|v| v.0)
+    } else {
+        None
+    };
+    table.set_width(term_width);
+
+    if flags.flag_crates {
+        print_crates(crate_data, &flags, &mut table);
+    } else {
+        print_methods(crate_data, &flags, &mut table);
+    }
+
+    print!("{}", table);
+
+    Ok(())
+}
+
+fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
     config.configure(
         flags.flag_verbose,
         flags.flag_quiet,
@@ -178,7 +180,6 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
             crates.push(crate_name.to_string());
         }
     }
-    let crates = &crates[..];
 
     let mut examples = Vec::new();
     let mut opt = ops::CompileOptions::default(&config, ops::CompileMode::Build);
@@ -202,37 +203,32 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
 
     let comp = ops::compile(&workspace, &opt)?;
 
-    let mut is_processed = false;
-
-    'outer: for (_, lib) in comp.libraries {
+    for (_, lib) in comp.libraries {
         for (_, path) in lib {
             let path_str = path.to_str().unwrap();
             if path_str.ends_with(".so") || path_str.ends_with(".dylib") {
-                process_bin(&path, crates, &flags);
-
-                // The 'cdylib' can be defined only once, so exit immediately.
-                is_processed = true;
-                break 'outer;
+                return Ok(CrateData {
+                    data: collect_data(&path)?,
+                    crates,
+                });
             }
         }
     }
 
-    if !is_processed && !comp.binaries.is_empty() {
-        process_bin(&comp.binaries[0], crates, &flags);
-        is_processed = true;
+    if !comp.binaries.is_empty() {
+        return Ok(CrateData {
+            data: collect_data(&comp.binaries[0])?,
+            crates,
+        });
     }
 
-    if !is_processed {
-        println!("Only 'bin' and 'cdylib' targets are supported.");
-    }
-
-    Ok(())
+    Err(CargoError::from("Only 'bin' and 'cdylib' targets are supported."))
 }
 
-fn process_bin(path: &path::Path, crates: &[String], flags: &Flags) {
-    let file = fs::File::open(path).unwrap();
-    let file = unsafe { memmap::Mmap::map(&file).unwrap() };
-    let file = object::File::parse(&*file).unwrap();
+fn collect_data(path: &path::Path) -> CargoResult<Data> {
+    let file = fs::File::open(path)?;
+    let file = unsafe { memmap::Mmap::map(&file)? };
+    let file = object::File::parse(&*file)?;
 
     let mut total_size = 0;
     let mut list = Vec::new();
@@ -247,89 +243,88 @@ fn process_bin(path: &path::Path, crates: &[String], flags: &Flags) {
         }
 
         total_size += symbol.size();
+
+        let fn_name = symbol.name().unwrap_or("<unknown>");
+        let fn_name = rustc_demangle::demangle(fn_name).to_string();
+
         list.push(SymbolData {
-            name: symbol.name().unwrap_or("<unknown>"),
+            name: fn_name,
             size: symbol.size(),
         });
     }
 
-    let data = Data {
+    let d = Data {
         symbols: list,
-        file_size: fs::metadata(path).unwrap().len(),
+        file_size: fs::metadata(path)?.len(),
         text_size: total_size,
     };
 
-    if flags.flag_crates {
-        print_crates(data, crates, flags);
-    } else {
-        print_methods(data, flags);
-    }
+    Ok(d)
 }
 
-fn print_methods(mut d: Data, flags: &Flags) {
-    d.symbols.sort_by_key(|v| v.size);
+fn print_methods(mut d: CrateData, flags: &Flags, table: &mut Table) {
+    d.data.symbols.sort_by_key(|v| v.size);
 
-    let mut lines: Vec<Line> = Vec::new();
-    let mut other_size = d.text_size;
+    let dd = &d.data;
+    let mut other_size = dd.text_size;
 
-    let n = if flags.flag_n == 0 { d.symbols.len() } else { flags.flag_n };
+    let n = if flags.flag_n == 0 { dd.symbols.len() } else { flags.flag_n };
 
-    for sym in d.symbols.iter().rev() {
-        let percent_file = sym.size as f64 / d.file_size as f64 as f64 * 100.0;
-        let percent_text = sym.size as f64 / d.text_size as f64 as f64 * 100.0;
-        let mut dem_name = rustc_demangle::demangle(sym.name).to_string();
+    for sym in dd.symbols.iter().rev() {
+        let percent_file = sym.size as f64 / dd.file_size as f64 * 100.0;
+        let percent_text = sym.size as f64 / dd.text_size as f64 * 100.0;
 
         if let Some(ref name) = flags.flag_filter {
-            if !dem_name.contains(name) {
+            if !sym.name.contains(name) {
                 continue;
             }
         }
 
         other_size -= sym.size;
 
+        let mut name = sym.name.clone();
+
         // crate::mod::fn::h5fbe0f2f0b5c7342 -> crate::mod::fn
         if !flags.flag_full_fn {
-            if let Some(pos) = dem_name.bytes().rposition(|b| b == b':') {
-                dem_name.drain((pos - 1)..);
+            if let Some(pos) = name.bytes().rposition(|b| b == b':') {
+                name.drain((pos - 1)..);
             }
         }
 
-        lines.push(Line::new(percent_file, percent_text, sym.size, dem_name));
+        push_row(table, percent_file, percent_text, sym.size, name);
 
-        if n != 0 && lines.len() == n {
+        if n != 0 && table.rows_count() == n {
             break;
         }
     }
 
-    let lines_len = lines.len();
-    lines.push(Line::new(
-        other_size as f64 / d.file_size as f64 * 100.0,
-        other_size as f64 / d.text_size as f64 * 100.0,
-        other_size,
-        format!("[{} Others]", d.symbols.len() - lines_len),
-    ));
+    {
+        let lines_len = table.rows_count();
+        let percent_file_s = format_percent(other_size as f64 / dd.file_size as f64 * 100.0);
+        let percent_text_s = format_percent(other_size as f64 / dd.text_size as f64 * 100.0);
+        let size_s = format_size(other_size);
+        let name_s = format!("[{} Others]", dd.symbols.len() - lines_len);
+        table.insert(0, &[&percent_file_s, &percent_text_s, &size_s, &name_s]);
+    }
 
-    lines.sort_by(|a, b| b.raw_size.cmp(&a.raw_size));
-
-    print_table(d, lines, flags);
+    push_total(table, dd);
 }
 
-fn print_crates(d: Data, crates: &[String], flags: &Flags) {
+fn print_crates(d: CrateData, flags: &Flags, table: &mut Table) {
     const UNKNOWN: &str = "[Unknown]";
 
+    let dd = &d.data;
     let mut sizes = HashMap::new();
 
-    for sym in d.symbols.iter() {
-        let name = rustc_demangle::demangle(sym.name).to_string();
-
+    for sym in dd.symbols.iter() {
         // Skip non-Rust names.
-        let mut crate_name = if !name.contains("::") {
+        let mut crate_name = if !sym.name.contains("::") {
             UNKNOWN.to_string()
         } else {
-            if let Some(s) = name.split("::").next() {
+            if let Some(s) = sym.name.split("::").next() {
                 s.to_owned()
             } else {
-                name.clone()
+                sym.name.clone()
             }
         };
 
@@ -347,12 +342,12 @@ fn print_crates(d: Data, crates: &[String], flags: &Flags) {
             }
         }
 
-        if crate_name != UNKNOWN && !crates.contains(&crate_name) {
+        if crate_name != UNKNOWN && !d.crates.contains(&crate_name) {
             crate_name = UNKNOWN.to_string();
         }
 
         if flags.flag_verbose > 0 {
-            println!("{} from {}", crate_name, name);
+            println!("{} from {}", crate_name, sym.name);
         }
 
         if let Some(v) = sizes.get(&crate_name).cloned() {
@@ -365,23 +360,33 @@ fn print_crates(d: Data, crates: &[String], flags: &Flags) {
     let mut list: Vec<(&String, &u64)> = sizes.iter().collect();
     list.sort_by_key(|v| v.1);
 
-    let mut lines = Vec::new();
     let n = if flags.flag_n == 0 { list.len() } else { flags.flag_n };
     for &(k, v) in list.iter().rev().take(n) {
-        let percent_file = *v as f64 / d.file_size as f64 as f64 * 100.0;
-        let percent_text = *v as f64 / d.text_size as f64 as f64 * 100.0;
+        let percent_file = *v as f64 / dd.file_size as f64 * 100.0;
+        let percent_text = *v as f64 / dd.text_size as f64 * 100.0;
 
-        lines.push(Line::new(percent_file, percent_text, *v, k.clone()));
+        push_row(table, percent_file, percent_text, *v, k.clone());
     }
 
-    print_table(d, lines, flags);
+    push_total(table, dd);
+}
+
+fn push_row(table: &mut Table, percent_file: f64, percent_text: f64, size: u64, name: String) {
+    let percent_file_s = format_percent(percent_file);
+    let percent_text_s = format_percent(percent_text);
+    let size_s = format_size(size);
+
+    table.push(&[percent_file_s, percent_text_s, size_s, name]);
+}
+
+fn push_total(table: &mut Table, d: &Data) {
+    let percent_file = d.text_size as f64 / d.file_size as f64 * 100.0;
+    let name = format!(".text section size, the file size is {}", format_size(d.file_size));
+    push_row(table, percent_file, 100.0, d.text_size, name);
 }
 
 fn format_percent(n: f64) -> String {
-    let mut s = format!("{:.1}", n);
-    s.pad_left(PERCENT_WIDTH);
-
-    s
+    format!("{:.1}%", n)
 }
 
 fn format_size(bytes: u64) -> String {
@@ -395,51 +400,4 @@ fn format_size(bytes: u64) -> String {
     } else {
         format!("{}B", bytes)
     }
-}
-
-fn print_table(d: Data, mut lines: Vec<Line>, flags: &Flags) {
-    lines.push(Line::new(
-        d.text_size as f64 / d.file_size as f64 * 100.0,
-        100.0,
-        d.text_size,
-        format!(".text section size, the file size is {}", format_size(d.file_size))
-    ));
-
-    let term_width = if !flags.flag_wide {
-        term_size::dimensions().map(|v| v.0)
-    } else {
-        None
-    };
-
-    let max_size_len = lines.iter().fold(0, |acc, ref v| cmp::max(acc, v.size.len()));
-
-    print_header(max_size_len);
-    for line in lines.iter() {
-        print_line(line, max_size_len, term_width);
-    }
-}
-
-fn print_header(max_size_len: usize) {
-    let mut size_title = "Size".to_string();
-    size_title.pad_left(max_size_len);
-
-    println!();
-    println!("  File  .text {} Name", size_title);
-}
-
-fn print_line(line: &Line, max_size_len: usize, term_width: Option<usize>) {
-    let mut size_s = line.size.clone();
-    size_s.pad_left(max_size_len);
-
-    let mut name = line.name.clone();
-    if let Some(term_width) = term_width {
-        let name_width = term_width - max_size_len - PERCENT_WIDTH * 2 - 6;
-
-        if line.name.len() > name_width {
-            name.drain((name_width - 3)..);
-            name.push_str("...");
-        }
-    }
-
-    println!("{}% {}% {} {}", line.percent_file, line.percent_text, size_s, name);
 }
