@@ -259,6 +259,7 @@ fn collect_rlib_paths(deps_dir: &path::Path) -> Vec<(String, path::PathBuf)> {
     rlib_paths
 }
 
+#[cfg(target_os = "linux")]
 fn collect_c_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashMap<String, String>> {
     let mut map = HashMap::new();
 
@@ -275,6 +276,11 @@ fn collect_c_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashMap<
     }
 
     Ok(map)
+}
+
+#[cfg(target_os = "macos")]
+fn collect_c_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashMap<String, String>> {
+    Ok(HashMap::new())
 }
 
 fn collect_data(path: &path::Path) -> CargoResult<Data> {
