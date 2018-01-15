@@ -1,3 +1,4 @@
+extern crate ar;
 extern crate cargo;
 extern crate docopt;
 extern crate env_logger;
@@ -13,7 +14,7 @@ extern crate term_size;
 mod table;
 
 
-use std::{env, fs, path};
+use std::{env, fs, path, str};
 use std::collections::HashMap;
 
 use object::{Object, SectionKind, SymbolKind};
@@ -27,16 +28,6 @@ use cargo::{CliResult, Config};
 
 use table::Table;
 
-
-const STD_CRATES: &[&str] = &[
-    "core",
-    "std_unicode",
-    "alloc",
-    "alloc_system",
-    "unreachable",
-    "unwind",
-    "panic_unwind",
-];
 
 const USAGE: &'static str = "
 Find out what takes most of the space in your executable
@@ -55,6 +46,7 @@ Options:
     --crates                Per crate bloatedness
     --filter CRATE          Filter functions by crate
     --split-std             Split the 'std' crate to original crates like core, alloc, etc.
+    --print-unknown         Print methods under the '[Unknown]' tag
     --full-fn               Print full function name with hash values
     -n NUM                  Number of lines to show, 0 to show all [default: 20]
     -w, --wide              Do not trim long function names
@@ -78,6 +70,7 @@ struct Flags {
     flag_crates: bool,
     flag_filter: Option<String>,
     flag_split_std: bool,
+    flag_print_unknown: bool,
     flag_full_fn: bool,
     flag_n: usize,
     flag_wide: bool,
@@ -102,7 +95,9 @@ struct Data {
 
 struct CrateData {
     data: Data,
-    crates: Vec<String>,
+    std_crates: Vec<String>,
+    dep_crates: Vec<String>,
+    c_symbols: HashMap<String, String>,
 }
 
 
@@ -145,12 +140,14 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
     };
     table.set_width(term_width);
 
+
     if flags.flag_crates {
         print_crates(crate_data, &flags, &mut table);
     } else {
         print_methods(crate_data, &flags, &mut table);
     }
 
+    println!();
     print!("{}", table);
 
     Ok(())
@@ -171,15 +168,6 @@ fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
         config.cwd()
     )?;
     let workspace = Workspace::new(&root, config)?;
-    let (pkgs, _) = ops::resolve_ws(&workspace)?;
-
-    let mut crates: Vec<String> = pkgs.package_ids().map(|p| p.name().replace("-", "_")).collect();
-    crates.push("std".to_string());
-    if flags.flag_split_std {
-        for crate_name in STD_CRATES {
-            crates.push(crate_name.to_string());
-        }
-    }
 
     let mut examples = Vec::new();
     let mut opt = ops::CompileOptions::default(&config, ops::CompileMode::Build);
@@ -203,13 +191,32 @@ fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
 
     let comp = ops::compile(&workspace, &opt)?;
 
+    let mut rlib_paths = collect_rlib_paths(&comp.deps_output);
+    let mut dep_crates: Vec<String> = rlib_paths.iter().map(|v| v.0.clone()).collect();
+
+    let mut crate_name = workspace.current().unwrap().name().to_string();
+    crate_name = crate_name.replace("-", "_");
+    dep_crates.push(crate_name);
+
+    let mut std_crates = Vec::new();
+    if let Some(path) = comp.target_dylib_path {
+        let paths = collect_rlib_paths(&path);
+        std_crates = paths.iter().map(|v| v.0.clone()).collect();
+
+        rlib_paths.extend_from_slice(&paths);
+    }
+
+    let c_symbols = collect_c_symbols(rlib_paths)?;
+
     for (_, lib) in comp.libraries {
         for (_, path) in lib {
             let path_str = path.to_str().unwrap();
             if path_str.ends_with(".so") || path_str.ends_with(".dylib") {
                 return Ok(CrateData {
                     data: collect_data(&path)?,
-                    crates,
+                    std_crates,
+                    dep_crates,
+                    c_symbols,
                 });
             }
         }
@@ -218,11 +225,56 @@ fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
     if !comp.binaries.is_empty() {
         return Ok(CrateData {
             data: collect_data(&comp.binaries[0])?,
-            crates,
+            std_crates,
+            dep_crates,
+            c_symbols,
         });
     }
 
     Err(CargoError::from("Only 'bin' and 'cdylib' targets are supported."))
+}
+
+fn collect_rlib_paths(deps_dir: &path::Path) -> Vec<(String, path::PathBuf)> {
+    let mut rlib_paths: Vec<(String, path::PathBuf)> = Vec::new();
+    if let Ok(entries) = fs::read_dir(deps_dir) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if let Some(Some("rlib")) = path.extension().map(|s| s.to_str()) {
+                    let mut stem = path.file_stem().unwrap().to_str().unwrap().to_string();
+                    if let Some(idx) = stem.bytes().position(|b| b == b'-') {
+                        stem.drain(idx..);
+                    }
+
+                    stem.drain(0..3); // trim 'lib'
+
+                    rlib_paths.push((stem, path));
+                }
+            }
+        }
+    }
+
+    rlib_paths.sort_by(|a, b| a.0.cmp(&b.0));
+
+    rlib_paths
+}
+
+fn collect_c_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashMap<String, String>> {
+    let mut map = HashMap::new();
+
+    for (name, path) in libs {
+        let f = fs::File::open(path)?;
+        let mut archive = ar::Archive::new(f);
+
+        for symbol in archive.symbols()? {
+            let symbol = str::from_utf8(symbol).unwrap();
+            if !symbol.starts_with("_ZN") {
+                map.insert(symbol.to_string(), name.clone());
+            }
+        }
+    }
+
+    Ok(map)
 }
 
 fn collect_data(path: &path::Path) -> CargoResult<Data> {
@@ -319,7 +371,15 @@ fn print_crates(d: CrateData, flags: &Flags, table: &mut Table) {
     for sym in dd.symbols.iter() {
         // Skip non-Rust names.
         let mut crate_name = if !sym.name.contains("::") {
-            UNKNOWN.to_string()
+            if let Some(v) = d.c_symbols.get(&sym.name) {
+                v.clone()
+            } else {
+                if flags.flag_print_unknown {
+                    println!("{}", sym.name);
+                }
+
+                UNKNOWN.to_string()
+            }
         } else {
             if let Some(s) = sym.name.split("::").next() {
                 s.to_owned()
@@ -337,23 +397,30 @@ fn print_crates(d: CrateData, flags: &Flags, table: &mut Table) {
         }
 
         if !flags.flag_split_std {
-            if STD_CRATES.contains(&crate_name.as_str()) {
+            if d.std_crates.contains(&crate_name) {
                 crate_name = "std".to_string();
             }
         }
 
-        if crate_name != UNKNOWN && !d.crates.contains(&crate_name) {
-            crate_name = UNKNOWN.to_string();
-        }
+        if     crate_name != UNKNOWN
+            && crate_name != "std"
+            && !d.std_crates.contains(&crate_name)
+            && !d.dep_crates.contains(&crate_name) {
+            if let Some(v) = d.c_symbols.get(&sym.name) {
+                crate_name = v.clone();
+            } else {
+                if flags.flag_print_unknown {
+                    println!("{}", sym.name);
+                }
 
-        if flags.flag_verbose > 0 {
-            println!("{} from {}", crate_name, sym.name);
+                crate_name = UNKNOWN.to_string();
+            }
         }
 
         if let Some(v) = sizes.get(&crate_name).cloned() {
-            sizes.insert(crate_name, v + sym.size);
+            sizes.insert(crate_name.to_string(), v + sym.size);
         } else {
-            sizes.insert(crate_name, sym.size);
+            sizes.insert(crate_name.to_string(), sym.size);
         }
     }
 
