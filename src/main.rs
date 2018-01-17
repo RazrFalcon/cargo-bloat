@@ -102,6 +102,11 @@ struct CrateData {
 
 
 fn main() {
+    if !(cfg!(target_os = "linux") || cfg!(target_os = "macos")) {
+        eprintln!("This OS is not supported.");
+        std::process::exit(1);
+    }
+
     env_logger::init().unwrap();
 
     let cwd = env::current_dir().expect("couldn't get the current directory of the process");
