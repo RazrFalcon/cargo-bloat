@@ -107,7 +107,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    env_logger::init().unwrap();
+    env_logger::init();
 
     let cwd = env::current_dir().expect("couldn't get the current directory of the process");
     let mut config = create_config(cwd);
