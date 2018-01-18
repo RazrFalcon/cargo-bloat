@@ -1,7 +1,7 @@
-extern crate ar;
 extern crate cargo;
 extern crate docopt;
 extern crate env_logger;
+extern crate goblin;
 extern crate memmap;
 extern crate object;
 extern crate rustc_demangle;
@@ -17,7 +17,7 @@ mod table;
 use std::{env, fs, path, str};
 use std::collections::HashMap;
 
-use object::{Object, SectionKind, SymbolKind};
+use object::Object;
 
 use cargo::core::shell::Shell;
 use cargo::core::Workspace;
@@ -264,28 +264,29 @@ fn collect_rlib_paths(deps_dir: &path::Path) -> Vec<(String, path::PathBuf)> {
     rlib_paths
 }
 
-#[cfg(target_os = "linux")]
 fn collect_c_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashMap<String, String>> {
     let mut map = HashMap::new();
 
     for (name, path) in libs {
-        let f = fs::File::open(path)?;
-        let mut archive = ar::Archive::new(f);
-
-        for symbol in archive.symbols()? {
-            let symbol = str::from_utf8(symbol).unwrap();
-            if !symbol.starts_with("_ZN") {
-                map.insert(symbol.to_string(), name.clone());
+        let file = fs::File::open(path)?;
+        let file = unsafe { memmap::Mmap::map(&file)? };
+        match goblin::archive::Archive::parse(&*file) {
+            Ok(archive) => {
+                for (_, _, symbols) in archive.summarize() {
+                    for sym in symbols {
+                        if !sym.starts_with("_ZN") {
+                            map.insert(sym.to_string(), name.clone());
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                return Err(CargoError::from(e.to_string().as_str()));
             }
         }
     }
 
     Ok(map)
-}
-
-#[cfg(target_os = "macos")]
-fn collect_c_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashMap<String, String>> {
-    Ok(HashMap::new())
 }
 
 fn collect_data(path: &path::Path) -> CargoResult<Data> {
@@ -297,11 +298,11 @@ fn collect_data(path: &path::Path) -> CargoResult<Data> {
     let mut list = Vec::new();
     for symbol in file.symbol_map().symbols() {
         match symbol.kind() {
-            SymbolKind::Section | SymbolKind::File => continue,
+            object::SymbolKind::Section | object::SymbolKind::File => continue,
             _ => {}
         }
 
-        if symbol.section_kind() != Some(SectionKind::Text) {
+        if symbol.section_kind() != Some(object::SectionKind::Text) {
             continue;
         }
 

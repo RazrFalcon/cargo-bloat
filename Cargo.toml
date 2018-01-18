@@ -8,10 +8,10 @@ readme = "README.md"
 license = "MIT"
 
 [dependencies]
-ar = "0.5.0"
 cargo = "0.24.0"
 docopt = "0.8.1"
 env_logger = "0.4.3"
+goblin = "0.0.14"
 memmap = "0.6"
 object = "0.7"
 rustc-demangle = "0.1.5"
