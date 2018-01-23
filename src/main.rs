@@ -43,6 +43,7 @@ Options:
     --features FEATURES     Space-separated list of features to also build
     --all-features          Build all available features
     --no-default-features   Do not build the `default` feature
+    --target TRIPLE         Build for the target triple
     --manifest-path PATH    Path to the manifest to analyze
     -v, --verbose           Use verbose output
     -q, --quiet             No output printed to stdout
@@ -68,6 +69,7 @@ struct Flags {
     flag_features: Vec<String>,
     flag_all_features: bool,
     flag_no_default_features: bool,
+    flag_target: Option<String>,
     flag_manifest_path: Option<String>,
     flag_verbose: u32,
     flag_quiet: Option<bool>,
@@ -184,6 +186,10 @@ fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
     opt.all_features = flags.flag_all_features;
     opt.no_default_features = flags.flag_no_default_features;
     opt.release = flags.flag_release;
+
+    if let Some(ref target) = flags.flag_target {
+        opt.target = Some(target);
+    }
 
     if let Some(ref name) = flags.flag_bin {
         bins.push(name.clone());
