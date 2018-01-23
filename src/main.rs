@@ -42,6 +42,7 @@ Options:
     --no-default-features   Do not build the `default` feature
     --manifest-path PATH    Path to the manifest to analyze
     --release               Build artifacts in release mode, with optimizations
+    --bin NAME              Name of the bin target to run
     --example NAME          Build only the specified example
     --crates                Per crate bloatedness
     --filter CRATE          Filter functions by crate
@@ -66,6 +67,7 @@ struct Flags {
     flag_no_default_features: bool,
     flag_manifest_path: Option<String>,
     flag_release: bool,
+    flag_bin: Option<String>,
     flag_example: Option<String>,
     flag_crates: bool,
     flag_filter: Option<String>,
@@ -174,19 +176,25 @@ fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
     )?;
     let workspace = Workspace::new(&root, config)?;
 
+    let mut bins = Vec::new();
     let mut examples = Vec::new();
+
     let mut opt = ops::CompileOptions::default(&config, ops::CompileMode::Build);
     opt.features = &flags.flag_features;
     opt.all_features = flags.flag_all_features;
     opt.no_default_features = flags.flag_no_default_features;
     opt.release = flags.flag_release;
 
-    if let Some(ref name) = flags.flag_example {
+    if let Some(ref name) = flags.flag_bin {
+        bins.push(name.clone());
+    } else if let Some(ref name) = flags.flag_example {
         examples.push(name.clone());
+    }
 
+    if flags.flag_bin.is_some() || flags.flag_example.is_some() {
         opt.filter = ops::CompileFilter::new(
             false,
-            &[], false,
+            &bins[..], false,
             &[], false,
             &examples[..], false,
             &[], false,
