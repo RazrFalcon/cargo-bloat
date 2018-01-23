@@ -37,13 +37,19 @@ Usage: cargo bloat [options]
 Options:
     -h, --help              Print this message
     -V, --version           Print version info and exit
+    --bin NAME              Name of the bin target to run
+    --example NAME          Build only the specified example
+    --release               Build artifacts in release mode, with optimizations
     --features FEATURES     Space-separated list of features to also build
     --all-features          Build all available features
     --no-default-features   Do not build the `default` feature
     --manifest-path PATH    Path to the manifest to analyze
-    --release               Build artifacts in release mode, with optimizations
-    --bin NAME              Name of the bin target to run
-    --example NAME          Build only the specified example
+    -v, --verbose           Use verbose output
+    -q, --quiet             No output printed to stdout
+    --color WHEN            Coloring: auto, always, never
+    --frozen                Require Cargo.lock and cache are up to date
+    --locked                Require Cargo.lock is up to date
+    -Z FLAG ...             Unstable (nightly-only) flags to Cargo
     --crates                Per crate bloatedness
     --filter CRATE          Filter functions by crate
     --split-std             Split the 'std' crate to original crates like core, alloc, etc.
@@ -51,24 +57,24 @@ Options:
     --full-fn               Print full function name with hash values
     -n NUM                  Number of lines to show, 0 to show all [default: 20]
     -w, --wide              Do not trim long function names
-    -v, --verbose           Use verbose output
-    -q, --quiet             No output printed to stdout
-    --color WHEN            Coloring: auto, always, never
-    --frozen                Require Cargo.lock and cache are up to date
-    --locked                Require Cargo.lock is up to date
-    -Z FLAG ...             Unstable (nightly-only) flags to Cargo
 ";
 
 #[derive(Deserialize)]
 struct Flags {
     flag_version: bool,
+    flag_bin: Option<String>,
+    flag_example: Option<String>,
+    flag_release: bool,
     flag_features: Vec<String>,
     flag_all_features: bool,
     flag_no_default_features: bool,
     flag_manifest_path: Option<String>,
-    flag_release: bool,
-    flag_bin: Option<String>,
-    flag_example: Option<String>,
+    flag_verbose: u32,
+    flag_quiet: Option<bool>,
+    flag_color: Option<String>,
+    flag_frozen: bool,
+    flag_locked: bool,
+    #[serde(rename = "flag_Z")] flag_z: Vec<String>,
     flag_crates: bool,
     flag_filter: Option<String>,
     flag_split_std: bool,
@@ -76,12 +82,6 @@ struct Flags {
     flag_full_fn: bool,
     flag_n: usize,
     flag_wide: bool,
-    flag_verbose: u32,
-    flag_quiet: Option<bool>,
-    flag_color: Option<String>,
-    flag_frozen: bool,
-    flag_locked: bool,
-    #[serde(rename = "flag_Z")] flag_z: Vec<String>,
 }
 
 struct SymbolData {
