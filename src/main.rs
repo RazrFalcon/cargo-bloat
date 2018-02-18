@@ -159,6 +159,12 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
     println!();
     print!("{}", table);
 
+    if flags.flag_crates {
+        println!();
+        println!("Warning: numbers above are a result of guesswork.\
+                  They are not 100% correct and never will be.");
+    }
+
     Ok(())
 }
 

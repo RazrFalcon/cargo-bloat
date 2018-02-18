@@ -21,18 +21,18 @@ Get a list of biggest functions in the release build:
     Finished release [optimized] target(s) in 0.2 secs
 
  File  .text    Size Name
-38.2%  93.3%  4.1MiB [8805 Others]
- 0.5%   1.3% 57.6KiB <regex::exec::ExecNoSync<'c> as regex::re_trait::RegularExpression>::read_captures_at
- 0.3%   0.8% 36.3KiB regex_syntax::parser::Parser::parse_expr
- 0.3%   0.7% 30.1KiB <cargo::core::resolver::encode::_IMPL_DESERIALIZE_FOR_EncodableResolve::<impl serde::de::D...
- 0.3%   0.6% 29.1KiB <cargo::util::toml::_IMPL_DESERIALIZE_FOR_TomlManifest::<impl serde::de::Deserialize<'de> ...
- 0.3%   0.6% 28.5KiB cargo::call_main_without_stdin
- 0.2%   0.6% 27.2KiB cargo::util::toml::do_read_manifest
- 0.2%   0.5% 24.0KiB globset::GlobSet::new
- 0.2%   0.5% 23.7KiB cargo::core::resolver::encode::EncodableResolve::into_resolve
- 0.2%   0.5% 23.6KiB cargo::ops::cargo_rustc::compile_targets
- 0.2%   0.5% 23.0KiB <cargo::util::toml::_IMPL_DESERIALIZE_FOR_TomlProject::<impl serde::de::Deserialize<'de> f...
-40.9% 100.0%  4.4MiB .text section size, the file size is 10.8MiB
+36.3%  95.0%  4.6MiB [12125 Others]
+ 0.4%   1.0% 50.4KiB <regex::exec::ExecNoSync<'c> as regex::re_trait::RegularExpression>::read_captures_at
+ 0.2%   0.6% 29.5KiB regex_syntax::parser::Parser::parse_expr
+ 0.2%   0.5% 26.2KiB <cargo::util::toml::_IMPL_DESERIALIZE_FOR_TomlManifest::<impl serde::de::Deserialize<'de> ...
+ 0.2%   0.4% 21.8KiB cargo::util::toml::targets::targets
+ 0.2%   0.4% 21.0KiB <cargo_bloat::_IMPL_DESERIALIZE_FOR_Flags::<impl serde::de::Deserialize<'de> for cargo_blo...
+ 0.2%   0.4% 20.9KiB <serde_ignored::Deserializer<'a, 'b, D, F> as serde::de::Deserializer<'de>>::deserialize_s...
+ 0.2%   0.4% 20.2KiB cargo::core::workspace::Workspace::new
+ 0.2%   0.4% 20.0KiB <toml::de::MapVisitor<'de, 'b> as serde::de::Deserializer<'de>>::deserialize_any
+ 0.1%   0.4% 19.4KiB <serde_ignored::Deserializer<'a, 'b, D, F> as serde::de::Deserializer<'de>>::deserialize_s...
+ 0.1%   0.4% 19.3KiB <cargo::util::toml::_IMPL_DESERIALIZE_FOR_TomlProject::<impl serde::de::Deserialize<'de> f...
+38.2% 100.0%  4.8MiB .text section size, the file size is 12.7MiB
 ```
 
 Get a list of biggest dependencies in the release build:
@@ -41,17 +41,19 @@ Get a list of biggest dependencies in the release build:
     Finished release [optimized] target(s) in 0.2 secs
 
  File  .text     Size Name
-11.3%  27.6%   1.2MiB cargo
-10.2%  24.9%   1.1MiB std
- 3.0%   7.2% 325.2KiB [Unknown]
- 2.7%   6.5% 293.2KiB libgit2_sys
- 2.2%   5.3% 240.5KiB toml
- 2.0%   5.0% 224.7KiB goblin
- 1.9%   4.7% 210.4KiB regex
- 1.1%   2.8% 124.7KiB serde_ignored
- 1.0%   2.5% 110.8KiB regex_syntax
- 0.9%   2.1%  95.2KiB serde_json
-40.9% 100.0%   4.4MiB .text section size, the file size is 10.8MiB
+14.4%  37.6%   1.8MiB std
+ 7.4%  19.4% 964.2KiB cargo
+ 2.5%   6.6% 325.2KiB [Unknown]
+ 2.4%   6.3% 313.5KiB toml
+ 2.3%   5.9% 293.2KiB libgit2_sys
+ 1.4%   3.7% 184.0KiB regex
+ 1.3%   3.4% 168.9KiB goblin
+ 1.2%   3.2% 159.6KiB serde_ignored
+ 0.9%   2.3% 113.2KiB serde_json
+ 0.8%   2.1% 105.7KiB regex_syntax
+38.2% 100.0%   4.8MiB .text section size, the file size is 12.7MiB
+
+Warning: numbers above are a result of guesswork.They are not 100% correct and never will be.
 ```
 
 Flags specific for `cargo-bloat`:
