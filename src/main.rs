@@ -106,7 +106,7 @@ struct CrateData {
 
 
 fn main() {
-    if !(cfg!(target_os = "linux") || cfg!(target_os = "macos")) {
+    if cfg!(not(unix)) {
         eprintln!("This OS is not supported.");
         std::process::exit(1);
     }
