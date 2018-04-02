@@ -5,9 +5,18 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.3.0] - 2018-04-02
 ### Changed
 - Cargo update to v0.25
 - All Unix-based OS'es are allowed now.
+
+## [0.2.2] - 2018-02-18
+### Added
+- A warning to the `--creates` output.
+
+### Changed
+- `rustc-demangle` updated.
 
 ## [0.2.1] - 2018-01-23
 ### Added
@@ -24,6 +33,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - When running on an unsupported OS you will get an error and not a random panic.
 - The table has a dynamic column width now.
 
-[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/RazrFalcon/cargo-bloat/compare/0.2.2...0.3.0
+[0.2.2]: https://github.com/RazrFalcon/cargo-bloat/compare/0.2.1...0.2.2
 [0.2.1]: https://github.com/RazrFalcon/cargo-bloat/compare/0.2.0...0.2.1
 [0.2.0]: https://github.com/RazrFalcon/cargo-bloat/compare/0.1.0...0.2.0
