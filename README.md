@@ -4,7 +4,7 @@ Find out what takes most of the space in your executable.
 
 Inspired by [google/bloaty](https://github.com/google/bloaty).
 
-**Note:** Linux and macOS only.
+**Note:** supports ELF (Linux, BSD) and Mach-O (macOS) platforms only.
 
 ### Install
 
