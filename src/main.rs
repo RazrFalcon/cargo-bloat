@@ -6,8 +6,8 @@ extern crate memmap;
 extern crate object;
 extern crate rustc_demangle;
 extern crate serde;
-#[macro_use]
-extern crate serde_derive;
+#[macro_use] extern crate failure;
+#[macro_use] extern crate serde_derive;
 extern crate term_size;
 
 
@@ -22,7 +22,7 @@ use object::Object;
 use cargo::core::shell::Shell;
 use cargo::core::Workspace;
 use cargo::ops;
-use cargo::util::errors::{CargoResult, CargoError};
+use cargo::util::errors::CargoResult;
 use cargo::util;
 use cargo::{CliResult, Config};
 
@@ -102,6 +102,27 @@ struct CrateData {
     std_crates: Vec<String>,
     dep_crates: Vec<String>,
     c_symbols: HashMap<String, String>,
+}
+
+#[derive(Fail, Debug)]
+enum Error {
+    #[fail(display = "{}", _0)]
+    Io(::std::io::Error),
+
+    #[fail(display = "{}", _0)]
+    String(String),
+}
+
+impl From<::std::io::Error> for Error {
+    fn from(value: ::std::io::Error) -> Error {
+        Error::Io(value)
+    }
+}
+
+impl<'a> From<&'a str> for Error {
+    fn from(value: &str) -> Error {
+        Error::String(value.to_string())
+    }
 }
 
 
@@ -256,7 +277,7 @@ fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
         });
     }
 
-    Err(CargoError::from("Only 'bin' and 'cdylib' targets are supported."))
+    bail!("Only 'bin' and 'cdylib' targets are supported.")
 }
 
 fn collect_rlib_paths(deps_dir: &path::Path) -> Vec<(String, path::PathBuf)> {
@@ -301,7 +322,7 @@ fn collect_c_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashMap<
                 }
             }
             Err(e) => {
-                return Err(CargoError::from(e.to_string().as_str()));
+                bail!(e.to_string())
             }
         }
     }
@@ -309,7 +330,7 @@ fn collect_c_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashMap<
     Ok(map)
 }
 
-fn collect_data(path: &path::Path) -> CargoResult<Data> {
+fn collect_data(path: &path::Path) -> Result<Data, Error> {
     let file = fs::File::open(path)?;
     let file = unsafe { memmap::Mmap::map(&file)? };
     let file = object::File::parse(&*file)?;

@@ -53,7 +53,7 @@ Get a list of biggest dependencies in the release build:
  0.8%   2.1% 105.7KiB regex_syntax
 38.2% 100.0%   4.8MiB .text section size, the file size is 12.7MiB
 
-Warning: numbers above are a result of guesswork.They are not 100% correct and never will be.
+Warning: numbers above are a result of guesswork. They are not 100% correct and never will be.
 ```
 
 Flags specific for `cargo-bloat`:
