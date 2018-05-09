@@ -7,10 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 ### Changed
 - Remove std crates from the `std` group that was explicitly added as dependencies.
+- Cargo update to v0.26.
 
 ## [0.3.0] - 2018-04-02
 ### Changed
-- Cargo update to v0.25
+- Cargo update to v0.25.
 - All Unix-based OS'es are allowed now.
 
 ## [0.2.2] - 2018-02-18
