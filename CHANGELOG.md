@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - Remove std crates from the `std` group that was explicitly added as dependencies.
 - Cargo update to v0.26.
+- Do not collect C symbols when `--creates` flag is not set.
 
 ## [0.3.0] - 2018-04-02
 ### Changed

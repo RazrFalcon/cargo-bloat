@@ -265,7 +265,12 @@ fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
         }
     }
 
-    let c_symbols = collect_c_symbols(rlib_paths)?;
+    let c_symbols = if flags.flag_crates {
+        // This method is very expensive so run it only when needed.
+        collect_c_symbols(rlib_paths)?
+    } else {
+        HashMap::new()
+    };
 
     for (_, lib) in comp.libraries {
         for (_, path) in lib {
