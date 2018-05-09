@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Changed
+- Remove std crates from the `std` group that was explicitly added as dependencies.
 
 ## [0.3.0] - 2018-04-02
 ### Changed

@@ -239,10 +239,13 @@ fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
 
     let mut rlib_paths = collect_rlib_paths(&comp.deps_output);
     let mut dep_crates: Vec<String> = rlib_paths.iter().map(|v| v.0.clone()).collect();
+    dep_crates.dedup();
 
     let mut crate_name = workspace.current().unwrap().name().to_string();
     crate_name = crate_name.replace("-", "_");
     dep_crates.push(crate_name);
+
+    dep_crates.sort();
 
     let mut std_crates = Vec::new();
     if let Some(path) = comp.target_dylib_path {
@@ -250,6 +253,16 @@ fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
         std_crates = paths.iter().map(|v| v.0.clone()).collect();
 
         rlib_paths.extend_from_slice(&paths);
+    }
+    std_crates.sort();
+
+    // Remove std crates that was explicitly added as dependencies.
+    //
+    // Like: getopts, bitflags, backtrace, log, etc.
+    for c in &dep_crates {
+        if let Some(idx) = std_crates.iter().position(|v| v == c) {
+            std_crates.remove(idx);
+        }
     }
 
     let c_symbols = collect_c_symbols(rlib_paths)?;
