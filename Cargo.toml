@@ -14,6 +14,7 @@ env_logger = "0.5.1"
 failure = "0.1.1"
 goblin = "0.0.13" # use this version because `object` uses it
 memmap = "0.6"
+multimap = "0.4.0"
 object = "0.7"
 rustc-demangle = "0.1.6"
 serde = "1.0.11"

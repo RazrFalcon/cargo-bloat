@@ -3,12 +3,13 @@ extern crate docopt;
 extern crate env_logger;
 extern crate goblin;
 extern crate memmap;
+extern crate multimap;
 extern crate object;
 extern crate rustc_demangle;
 extern crate serde;
+extern crate term_size;
 #[macro_use] extern crate failure;
 #[macro_use] extern crate serde_derive;
-extern crate term_size;
 
 
 mod table;
@@ -25,6 +26,8 @@ use cargo::ops;
 use cargo::util::errors::CargoResult;
 use cargo::util;
 use cargo::{CliResult, Config};
+
+use multimap::MultiMap;
 
 use table::Table;
 
@@ -99,7 +102,7 @@ struct CrateData {
     data: Data,
     std_crates: Vec<String>,
     dep_crates: Vec<String>,
-    deps_symbols: HashMap<String, String>, // symbol, crate
+    deps_symbols: MultiMap<String, String>, // symbol, crate
 }
 
 #[derive(Fail, Debug)]
@@ -320,8 +323,8 @@ fn collect_rlib_paths(deps_dir: &path::Path) -> Vec<(String, path::PathBuf)> {
     rlib_paths
 }
 
-fn collect_deps_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashMap<String, String>> {
-    let mut map = HashMap::new();
+fn collect_deps_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<MultiMap<String, String>> {
+    let mut map = MultiMap::new();
 
     for (name, path) in libs {
         let file = fs::File::open(path)?;
@@ -343,6 +346,10 @@ fn collect_deps_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashM
                 bail!(e.to_string())
             }
         }
+    }
+
+    for (_, v) in map.iter_all_mut() {
+        v.dedup();
     }
 
     Ok(map)
@@ -519,7 +526,17 @@ fn crate_from_sym(d: &CrateData, flags: &Flags, sym: &str) -> (String, bool) {
         Symbol::Function(crate_name) => {
             // Just a simple function like:
             // getopts::Options::parse
-            crate_name
+
+            if let Some(mut names) = d.deps_symbols.get_vec(sym) {
+                if names.len() == 1 {
+                    // In case the symbol was instanced in a different crate.
+                    names[0].clone()
+                } else {
+                    crate_name
+                }
+            } else {
+                crate_name
+            }
         }
         Symbol::Trait(ref crate_name1, ref crate_name2) => {
             // <crate_name1::Type as crate_name2::Trait>::fn
@@ -532,8 +549,6 @@ fn crate_from_sym(d: &CrateData, flags: &Flags, sym: &str) -> (String, bool) {
                 if crate_name1 == crate_name2 {
                     crate_name1.clone()
                 } else {
-                    is_exact = false;
-
                     // This is an uncertain case.
                     //
                     // Example:
@@ -544,9 +559,24 @@ fn crate_from_sym(d: &CrateData, flags: &Flags, sym: &str) -> (String, bool) {
                     // Usually, those traits will be present in `deps_symbols`
                     // so they will be resolved automatically, in other cases it's an UB.
 
-                    if let Some(name) = d.deps_symbols.get(sym) {
-                        name.clone()
+                    if let Some(names) = d.deps_symbols.get_vec(sym) {
+                        if names.contains(crate_name1) {
+                            crate_name1.clone()
+                        } else if names.contains(crate_name2) {
+                            crate_name2.clone()
+                        } else {
+                            // Example:
+                            // <std::collections::hash::map::DefaultHasher as core::hash::Hasher>::finish
+                            // ["cc", "cc", "fern", "fern", "svgdom", "svgdom"]
+
+                            is_exact = false;
+                            crate_name1.clone()
+                        }
                     } else {
+                        // If the symbol is not in `deps_symbols` then it probably
+                        // was imported/inlined to the crate bin itself.
+
+                        is_exact = false;
                         crate_name1.clone()
                     }
                 }
