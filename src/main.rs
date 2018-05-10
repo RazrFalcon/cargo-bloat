@@ -333,12 +333,8 @@ fn collect_deps_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<Multi
             Ok(archive) => {
                 for (_, _, symbols) in archive.summarize() {
                     for sym in symbols {
-                        if !sym.starts_with("_ZN") {
-                            map.insert(sym.to_string(), name.clone());
-                        } else {
-                            let sym = rustc_demangle::demangle(sym).to_string();
-                            map.insert(sym, name.clone());
-                        }
+                        let sym = rustc_demangle::demangle(sym).to_string();
+                        map.insert(sym, name.clone());
                     }
                 }
             }

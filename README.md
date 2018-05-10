@@ -20,19 +20,19 @@ Get a list of biggest functions in the release build:
 % cargo bloat --release -n 10
     Finished release [optimized] target(s) in 0.2 secs
 
- File  .text    Size Name
-36.3%  95.0%  4.6MiB [12125 Others]
- 0.4%   1.0% 50.4KiB <regex::exec::ExecNoSync<'c> as regex::re_trait::RegularExpression>::read_captures_at
- 0.2%   0.6% 29.5KiB regex_syntax::parser::Parser::parse_expr
- 0.2%   0.5% 26.2KiB <cargo::util::toml::_IMPL_DESERIALIZE_FOR_TomlManifest::<impl serde::de::Deserialize<'de> ...
- 0.2%   0.4% 21.8KiB cargo::util::toml::targets::targets
- 0.2%   0.4% 21.0KiB <cargo_bloat::_IMPL_DESERIALIZE_FOR_Flags::<impl serde::de::Deserialize<'de> for cargo_blo...
- 0.2%   0.4% 20.9KiB <serde_ignored::Deserializer<'a, 'b, D, F> as serde::de::Deserializer<'de>>::deserialize_s...
- 0.2%   0.4% 20.2KiB cargo::core::workspace::Workspace::new
- 0.2%   0.4% 20.0KiB <toml::de::MapVisitor<'de, 'b> as serde::de::Deserializer<'de>>::deserialize_any
- 0.1%   0.4% 19.4KiB <serde_ignored::Deserializer<'a, 'b, D, F> as serde::de::Deserializer<'de>>::deserialize_s...
- 0.1%   0.4% 19.3KiB <cargo::util::toml::_IMPL_DESERIALIZE_FOR_TomlProject::<impl serde::de::Deserialize<'de> f...
-38.2% 100.0%  4.8MiB .text section size, the file size is 12.7MiB
+ File  .text    Size                 Crate Name
+36.5%  93.9%  5.0MiB                       [13502 Others]
+ 0.4%   1.0% 55.6KiB                 regex <regex::exec::ExecNoSync<'c> as regex::re_trait::Regu...
+ 0.4%   0.9% 49.0KiB unicode_normalization unicode_normalization::tables::compatibility_fully_de...
+ 0.3%   0.9% 48.6KiB          regex_syntax <regex_syntax::ast::parse::ParserI<'s, P>>::parse_wit...
+ 0.3%   0.8% 44.7KiB          regex_syntax <regex_syntax::ast::parse::ParserI<'s, P>>::parse_wit...
+ 0.3%   0.7% 38.1KiB unicode_normalization unicode_normalization::tables::canonical_fully_decomp...
+ 0.2%   0.4% 21.5KiB                 toml? <toml::de::MapVisitor<'de, 'b> as serde::de::Deserial...
+ 0.1%   0.4% 20.1KiB                 cargo cargo::core::resolver::activate_deps_loop
+ 0.1%   0.4% 20.1KiB                 cargo cargo::util::toml::targets::targets
+ 0.1%   0.3% 18.0KiB                 regex <regex::re_trait::Matches<'t, R> as core::iter::itera...
+ 0.1%   0.3% 17.7KiB                 cargo <cargo::util::toml::_IMPL_DESERIALIZE_FOR_TomlManifes...
+38.8% 100.0%  5.3MiB                       .text section size, the file size is 13.6MiB
 ```
 
 Get a list of biggest dependencies in the release build:
@@ -41,19 +41,19 @@ Get a list of biggest dependencies in the release build:
     Finished release [optimized] target(s) in 0.2 secs
 
  File  .text     Size Name
-14.4%  37.6%   1.8MiB std
- 7.4%  19.4% 964.2KiB cargo
- 2.5%   6.6% 325.2KiB [Unknown]
- 2.4%   6.3% 313.5KiB toml
- 2.3%   5.9% 293.2KiB libgit2_sys
- 1.4%   3.7% 184.0KiB regex
- 1.3%   3.4% 168.9KiB goblin
- 1.2%   3.2% 159.6KiB serde_ignored
- 0.9%   2.3% 113.2KiB serde_json
- 0.8%   2.1% 105.7KiB regex_syntax
-38.2% 100.0%   4.8MiB .text section size, the file size is 12.7MiB
+11.0%  28.4%   1.5MiB cargo
+ 7.6%  19.5%   1.0MiB std
+ 3.0%   7.7% 420.2KiB regex_syntax
+ 2.8%   7.1% 385.0KiB toml
+ 2.5%   6.5% 351.0KiB regex
+ 2.2%   5.6% 301.5KiB [Unknown]
+ 2.0%   5.2% 281.3KiB libgit2_sys
+ 1.1%   2.9% 157.4KiB goblin
+ 0.8%   2.1% 112.6KiB serde_json
+ 0.8%   2.1% 111.7KiB docopt
+38.8% 100.0%   5.3MiB .text section size, the file size is 13.6MiB
 
-Warning: numbers above are a result of guesswork. They are not 100% correct and never will be.
+Note: numbers above are a result of guesswork. They are not 100% correct and never will be.
 ```
 
 Flags specific for `cargo-bloat`:
