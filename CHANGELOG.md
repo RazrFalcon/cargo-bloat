@@ -5,11 +5,16 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- A *Crate* column to the main table.
+
 ### Changed
 - A better crates resolving algorithm.
 - Remove std crates from the `std` group that was explicitly added as dependencies.
 - Cargo update to v0.26.
-- Do not collect C symbols when `--creates` flag is not set.
+
+### Fixed
+- The `--filter` flag behavior.
 
 ### Removed
 - The `--print-unknown` flag.

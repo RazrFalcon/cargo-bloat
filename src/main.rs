@@ -159,7 +159,11 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
 
     let crate_data = process_crate(&flags, config)?;
 
-    let mut table = Table::new(&["File", ".text", "Size", "Name"]);
+    let mut table = if flags.flag_crates {
+        Table::new(&["File", ".text", "Size", "Name"])
+    } else {
+        Table::new(&["File", ".text", "Size", "Crate", "Name"])
+    };
 
     let term_width = if !flags.flag_wide {
         term_size::dimensions().map(|v| v.0)
@@ -180,7 +184,7 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
 
     if flags.flag_crates {
         println!();
-        println!("Warning: numbers above are a result of guesswork. \
+        println!("Note: numbers above are a result of guesswork. \
                   They are not 100% correct and never will be.");
     }
 
@@ -263,12 +267,7 @@ fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
         }
     }
 
-    let deps_symbols = if flags.flag_crates {
-        // This method is very expensive so run it only when needed.
-        collect_deps_symbols(rlib_paths)?
-    } else {
-        HashMap::new()
-    };
+    let deps_symbols = collect_deps_symbols(rlib_paths)?;
 
     for (_, lib) in comp.libraries {
         for (_, path) in lib {
@@ -387,6 +386,14 @@ fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
 }
 
 fn print_methods(mut d: CrateData, flags: &Flags, table: &mut Table) {
+    fn push_row(table: &mut Table, percent_file: f64, percent_text: f64, size: u64,
+                crate_name: String, name: String) {
+        let percent_file_s = format_percent(percent_file);
+        let percent_text_s = format_percent(percent_text);
+        let size_s = format_size(size);
+        table.push(&[percent_file_s, percent_text_s, size_s, crate_name, name]);
+    }
+
     d.data.symbols.sort_by_key(|v| v.size);
 
     let dd = &d.data;
@@ -398,10 +405,16 @@ fn print_methods(mut d: CrateData, flags: &Flags, table: &mut Table) {
         let percent_file = sym.size as f64 / dd.file_size as f64 * 100.0;
         let percent_text = sym.size as f64 / dd.text_size as f64 * 100.0;
 
+        let (mut crate_name, is_exact) = crate_from_sym(&d, flags, &sym.name);
+
         if let Some(ref name) = flags.flag_filter {
-            if !sym.name.contains(name) {
+            if name != &crate_name {
                 continue;
             }
+        }
+
+        if !is_exact {
+            crate_name.push('?');
         }
 
         other_size -= sym.size;
@@ -415,7 +428,7 @@ fn print_methods(mut d: CrateData, flags: &Flags, table: &mut Table) {
             }
         }
 
-        push_row(table, percent_file, percent_text, sym.size, name);
+        push_row(table, percent_file, percent_text, sym.size, crate_name, name);
 
         if n != 0 && table.rows_count() == n {
             break;
@@ -428,10 +441,14 @@ fn print_methods(mut d: CrateData, flags: &Flags, table: &mut Table) {
         let percent_text_s = format_percent(other_size as f64 / dd.text_size as f64 * 100.0);
         let size_s = format_size(other_size);
         let name_s = format!("[{} Others]", dd.symbols.len() - lines_len);
-        table.insert(0, &[&percent_file_s, &percent_text_s, &size_s, &name_s]);
+        table.insert(0, &[&percent_file_s, &percent_text_s, &size_s, "", &name_s]);
     }
 
-    push_total(table, dd);
+    {
+        let percent_file = dd.text_size as f64 / dd.file_size as f64 * 100.0;
+        let name = format!(".text section size, the file size is {}", format_size(dd.file_size));
+        push_row(table, percent_file, 100.0, dd.text_size, String::new(), name);
+    }
 }
 
 #[derive(Debug)]
@@ -447,6 +464,8 @@ fn parse_sym(sym: &str) -> Symbol {
     if !sym.contains("::") {
         return Symbol::CFunction;
     }
+
+    // TODO: ` for `
 
     if sym.contains(" as ") {
         let parts: Vec<_> = sym.split(" as ").collect();
@@ -478,47 +497,44 @@ fn parse_crate_from_sym(sym: &str) -> String {
     crate_name
 }
 
-fn print_crates(d: CrateData, flags: &Flags, table: &mut Table) {
+fn crate_from_sym(d: &CrateData, flags: &Flags, sym: &str) -> (String, bool) {
     const UNKNOWN: &str = "[Unknown]";
 
-    let dd = &d.data;
-    let mut sizes = HashMap::new();
+    let mut is_exact = true;
 
-    for sym in dd.symbols.iter() {
-        // Lookup in dependencies symbols first.
-        let mut crate_name = if let Some(name) = d.deps_symbols.get(&sym.name) {
-            name.to_string()
-        } else {
-            // If the symbols aren't present in dependencies - try to figure out
-            // where it was defined.
-            //
-            // The algorithm below is completely speculative.
-            match parse_sym(&sym.name) {
-                Symbol::CFunction => {
-                    // If the symbols is a C function and it wasn't found
-                    // in `deps_symbols` that we can't do anything about it.
-                    UNKNOWN.to_string()
-                }
-                Symbol::Function(crate_name) => {
-                    // Just a simple function like:
-                    // getopts::Options::parse
-                    crate_name
-                }
-                Symbol::Trait(ref crate_name1, ref crate_name2) => {
-                    // <crate_name1::Type as crate_name2::Trait>::fn
+    // If the symbols aren't present in dependencies - try to figure out
+    // where it was defined.
+    //
+    // The algorithm below is completely speculative.
+    let mut crate_name = match parse_sym(sym) {
+        Symbol::CFunction => {
+            if let Some(name) = d.deps_symbols.get(sym) {
+                name.to_string()
+            } else {
+                // If the symbols is a C function and it wasn't found
+                // in `deps_symbols` that we can't do anything about it.
+                UNKNOWN.to_string()
+            }
+        }
+        Symbol::Function(crate_name) => {
+            // Just a simple function like:
+            // getopts::Options::parse
+            crate_name
+        }
+        Symbol::Trait(ref crate_name1, ref crate_name2) => {
+            // <crate_name1::Type as crate_name2::Trait>::fn
 
-                    // `crate_name1` can be empty in cases when it's just a type parameter, like:
-                    // <T as core::fmt::Display>::fmt::h92003a61120a7e1a
-                    if crate_name1.is_empty() {
-                        crate_name2.clone()
-                    } else {
-                        // Use 'first' crate in cases like:
-                        // <mycrate::MyType as core::iter::iterator::Iterator>::next
-                        crate_name1.clone()
-                    }
+            // `crate_name1` can be empty in cases when it's just a type parameter, like:
+            // <T as core::fmt::Display>::fmt::h92003a61120a7e1a
+            if crate_name1.is_empty() {
+                crate_name2.clone()
+            } else {
+                if crate_name1 == crate_name2 {
+                    crate_name1.clone()
+                } else {
+                    is_exact = false;
 
-                    // There are also uncertain cases, when trait is defined and instanced
-                    // by the same crate.
+                    // This is an uncertain case.
                     //
                     // Example:
                     // <euclid::rect::TypedRect<f64> as resvg::geom::RectExt>::x
@@ -527,27 +543,44 @@ fn print_crates(d: CrateData, flags: &Flags, table: &mut Table) {
                     // in the `resvg` crate, but the first crate is `euclid`.
                     // Usually, those traits will be present in `deps_symbols`
                     // so they will be resolved automatically, in other cases it's an UB.
+
+                    if let Some(name) = d.deps_symbols.get(sym) {
+                        name.clone()
+                    } else {
+                        crate_name1.clone()
+                    }
                 }
             }
-        };
+        }
+    };
 
-        // If the detected crate is unknown (and not marked as `[Unknown]`),
-        // then mark it as `[Unknown]`.
-        if     crate_name != UNKNOWN
-            && crate_name != "std"
-            && !d.std_crates.contains(&crate_name)
-            && !d.dep_crates.contains(&crate_name)
+    // If the detected crate is unknown (and not marked as `[Unknown]`),
+    // then mark it as `[Unknown]`.
+    if     crate_name != UNKNOWN
+        && crate_name != "std"
+        && !d.std_crates.contains(&crate_name)
+        && !d.dep_crates.contains(&crate_name)
         {
             // There was probably a bug in the code above if we get here.
             crate_name = UNKNOWN.to_string();
         }
 
 
-        if !flags.flag_split_std {
-            if d.std_crates.contains(&crate_name) {
-                crate_name = "std".to_string();
-            }
+    if !flags.flag_split_std {
+        if d.std_crates.contains(&crate_name) {
+            crate_name = "std".to_string();
         }
+    }
+
+    (crate_name, is_exact)
+}
+
+fn print_crates(d: CrateData, flags: &Flags, table: &mut Table) {
+    let dd = &d.data;
+    let mut sizes = HashMap::new();
+
+    for sym in dd.symbols.iter() {
+        let (mut crate_name, _) = crate_from_sym(&d, flags, &sym.name);
 
         if let Some(v) = sizes.get(&crate_name).cloned() {
             sizes.insert(crate_name.to_string(), v + sym.size);
@@ -559,6 +592,14 @@ fn print_crates(d: CrateData, flags: &Flags, table: &mut Table) {
     let mut list: Vec<(&String, &u64)> = sizes.iter().collect();
     list.sort_by_key(|v| v.1);
 
+    fn push_row(table: &mut Table, percent_file: f64, percent_text: f64, size: u64, name: String) {
+        let percent_file_s = format_percent(percent_file);
+        let percent_text_s = format_percent(percent_text);
+        let size_s = format_size(size);
+
+        table.push(&[percent_file_s, percent_text_s, size_s, name]);
+    }
+
     let n = if flags.flag_n == 0 { list.len() } else { flags.flag_n };
     for &(k, v) in list.iter().rev().take(n) {
         let percent_file = *v as f64 / dd.file_size as f64 * 100.0;
@@ -567,21 +608,11 @@ fn print_crates(d: CrateData, flags: &Flags, table: &mut Table) {
         push_row(table, percent_file, percent_text, *v, k.clone());
     }
 
-    push_total(table, dd);
-}
-
-fn push_row(table: &mut Table, percent_file: f64, percent_text: f64, size: u64, name: String) {
-    let percent_file_s = format_percent(percent_file);
-    let percent_text_s = format_percent(percent_text);
-    let size_s = format_size(size);
-
-    table.push(&[percent_file_s, percent_text_s, size_s, name]);
-}
-
-fn push_total(table: &mut Table, d: &Data) {
-    let percent_file = d.text_size as f64 / d.file_size as f64 * 100.0;
-    let name = format!(".text section size, the file size is {}", format_size(d.file_size));
-    push_row(table, percent_file, 100.0, d.text_size, name);
+    {
+        let percent_file = dd.text_size as f64 / dd.file_size as f64 * 100.0;
+        let name = format!(".text section size, the file size is {}", format_size(dd.file_size));
+        push_row(table, percent_file, 100.0, dd.text_size, name);
+    }
 }
 
 fn format_percent(n: f64) -> String {
