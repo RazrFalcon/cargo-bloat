@@ -5,11 +5,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.4.0] - 2018-05-10
 ### Added
 - A *Crate* column to the main table.
+- A better crates resolving algorithm.
 
 ### Changed
-- A better crates resolving algorithm.
 - Remove std crates from the `std` group that was explicitly added as dependencies.
 - Cargo update to v0.26.
 
@@ -46,7 +48,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - When running on an unsupported OS you will get an error and not a random panic.
 - The table has a dynamic column width now.
 
-[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.4.0...HEAD
+[0.3.0]: https://github.com/RazrFalcon/cargo-bloat/compare/0.3.0...0.4.0
 [0.3.0]: https://github.com/RazrFalcon/cargo-bloat/compare/0.2.2...0.3.0
 [0.2.2]: https://github.com/RazrFalcon/cargo-bloat/compare/0.2.1...0.2.2
 [0.2.1]: https://github.com/RazrFalcon/cargo-bloat/compare/0.2.0...0.2.1
