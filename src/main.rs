@@ -54,7 +54,6 @@ Options:
     --crates                Per crate bloatedness
     --filter CRATE          Filter functions by crate
     --split-std             Split the 'std' crate to original crates like core, alloc, etc.
-    --print-unknown         Print methods under the '[Unknown]' tag
     --full-fn               Print full function name with hash values
     -n NUM                  Number of lines to show, 0 to show all [default: 20]
     -w, --wide              Do not trim long function names
@@ -80,7 +79,6 @@ struct Flags {
     flag_crates: bool,
     flag_filter: Option<String>,
     flag_split_std: bool,
-    flag_print_unknown: bool,
     flag_full_fn: bool,
     flag_n: usize,
     flag_wide: bool,
@@ -101,7 +99,7 @@ struct CrateData {
     data: Data,
     std_crates: Vec<String>,
     dep_crates: Vec<String>,
-    c_symbols: HashMap<String, String>,
+    deps_symbols: HashMap<String, String>, // symbol, crate
 }
 
 #[derive(Fail, Debug)]
@@ -265,9 +263,9 @@ fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
         }
     }
 
-    let c_symbols = if flags.flag_crates {
+    let deps_symbols = if flags.flag_crates {
         // This method is very expensive so run it only when needed.
-        collect_c_symbols(rlib_paths)?
+        collect_deps_symbols(rlib_paths)?
     } else {
         HashMap::new()
     };
@@ -277,10 +275,10 @@ fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
             let path_str = path.to_str().unwrap();
             if path_str.ends_with(".so") || path_str.ends_with(".dylib") {
                 return Ok(CrateData {
-                    data: collect_data(&path)?,
+                    data: collect_self_data(&path)?,
                     std_crates,
                     dep_crates,
-                    c_symbols,
+                    deps_symbols,
                 });
             }
         }
@@ -288,10 +286,10 @@ fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
 
     if !comp.binaries.is_empty() {
         return Ok(CrateData {
-            data: collect_data(&comp.binaries[0])?,
+            data: collect_self_data(&comp.binaries[0])?,
             std_crates,
             dep_crates,
-            c_symbols,
+            deps_symbols,
         });
     }
 
@@ -323,7 +321,7 @@ fn collect_rlib_paths(deps_dir: &path::Path) -> Vec<(String, path::PathBuf)> {
     rlib_paths
 }
 
-fn collect_c_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashMap<String, String>> {
+fn collect_deps_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashMap<String, String>> {
     let mut map = HashMap::new();
 
     for (name, path) in libs {
@@ -335,6 +333,9 @@ fn collect_c_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashMap<
                     for sym in symbols {
                         if !sym.starts_with("_ZN") {
                             map.insert(sym.to_string(), name.clone());
+                        } else {
+                            let sym = rustc_demangle::demangle(sym).to_string();
+                            map.insert(sym, name.clone());
                         }
                     }
                 }
@@ -348,7 +349,7 @@ fn collect_c_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<HashMap<
     Ok(map)
 }
 
-fn collect_data(path: &path::Path) -> Result<Data, Error> {
+fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
     let file = fs::File::open(path)?;
     let file = unsafe { memmap::Mmap::map(&file)? };
     let file = object::File::parse(&*file)?;
@@ -433,6 +434,50 @@ fn print_methods(mut d: CrateData, flags: &Flags, table: &mut Table) {
     push_total(table, dd);
 }
 
+#[derive(Debug)]
+enum Symbol {
+    Function(String),
+    CFunction,
+    Trait(String, String),
+}
+
+// A simple stupid symbol parser.
+// Should be replaced by something better later.
+fn parse_sym(sym: &str) -> Symbol {
+    if !sym.contains("::") {
+        return Symbol::CFunction;
+    }
+
+    if sym.contains(" as ") {
+        let parts: Vec<_> = sym.split(" as ").collect();
+        Symbol::Trait(parse_crate_from_sym(parts[0]), parse_crate_from_sym(parts[1]))
+    } else {
+        Symbol::Function(parse_crate_from_sym(sym))
+    }
+}
+
+fn parse_crate_from_sym(sym: &str) -> String {
+    if !sym.contains("::") {
+        return String::new();
+    }
+
+    let mut crate_name = if let Some(s) = sym.split("::").next() {
+        s.to_string()
+    } else {
+        sym.to_string()
+    };
+
+    if crate_name.starts_with("<") {
+        while crate_name.starts_with("<") {
+            crate_name.remove(0);
+        }
+
+        crate_name = crate_name.split_whitespace().last().unwrap().to_owned();
+    }
+
+    crate_name
+}
+
 fn print_crates(d: CrateData, flags: &Flags, table: &mut Table) {
     const UNKNOWN: &str = "[Unknown]";
 
@@ -440,51 +485,67 @@ fn print_crates(d: CrateData, flags: &Flags, table: &mut Table) {
     let mut sizes = HashMap::new();
 
     for sym in dd.symbols.iter() {
-        // Skip non-Rust names.
-        let mut crate_name = if !sym.name.contains("::") {
-            if let Some(v) = d.c_symbols.get(&sym.name) {
-                v.clone()
-            } else {
-                if flags.flag_print_unknown {
-                    println!("{}", sym.name);
-                }
-
-                UNKNOWN.to_string()
-            }
+        // Lookup in dependencies symbols first.
+        let mut crate_name = if let Some(name) = d.deps_symbols.get(&sym.name) {
+            name.to_string()
         } else {
-            if let Some(s) = sym.name.split("::").next() {
-                s.to_owned()
-            } else {
-                sym.name.clone()
+            // If the symbols aren't present in dependencies - try to figure out
+            // where it was defined.
+            //
+            // The algorithm below is completely speculative.
+            match parse_sym(&sym.name) {
+                Symbol::CFunction => {
+                    // If the symbols is a C function and it wasn't found
+                    // in `deps_symbols` that we can't do anything about it.
+                    UNKNOWN.to_string()
+                }
+                Symbol::Function(crate_name) => {
+                    // Just a simple function like:
+                    // getopts::Options::parse
+                    crate_name
+                }
+                Symbol::Trait(ref crate_name1, ref crate_name2) => {
+                    // <crate_name1::Type as crate_name2::Trait>::fn
+
+                    // `crate_name1` can be empty in cases when it's just a type parameter, like:
+                    // <T as core::fmt::Display>::fmt::h92003a61120a7e1a
+                    if crate_name1.is_empty() {
+                        crate_name2.clone()
+                    } else {
+                        // Use 'first' crate in cases like:
+                        // <mycrate::MyType as core::iter::iterator::Iterator>::next
+                        crate_name1.clone()
+                    }
+
+                    // There are also uncertain cases, when trait is defined and instanced
+                    // by the same crate.
+                    //
+                    // Example:
+                    // <euclid::rect::TypedRect<f64> as resvg::geom::RectExt>::x
+                    //
+                    // Here we defined and instanced the `RectExt` trait
+                    // in the `resvg` crate, but the first crate is `euclid`.
+                    // Usually, those traits will be present in `deps_symbols`
+                    // so they will be resolved automatically, in other cases it's an UB.
+                }
             }
         };
 
-        if crate_name.starts_with("<") {
-            while crate_name.starts_with("<") {
-                crate_name.remove(0);
-            }
-
-            crate_name = crate_name.split_whitespace().last().unwrap().to_owned();
+        // If the detected crate is unknown (and not marked as `[Unknown]`),
+        // then mark it as `[Unknown]`.
+        if     crate_name != UNKNOWN
+            && crate_name != "std"
+            && !d.std_crates.contains(&crate_name)
+            && !d.dep_crates.contains(&crate_name)
+        {
+            // There was probably a bug in the code above if we get here.
+            crate_name = UNKNOWN.to_string();
         }
+
 
         if !flags.flag_split_std {
             if d.std_crates.contains(&crate_name) {
                 crate_name = "std".to_string();
-            }
-        }
-
-        if     crate_name != UNKNOWN
-            && crate_name != "std"
-            && !d.std_crates.contains(&crate_name)
-            && !d.dep_crates.contains(&crate_name) {
-            if let Some(v) = d.c_symbols.get(&sym.name) {
-                crate_name = v.clone();
-            } else {
-                if flags.flag_print_unknown {
-                    println!("{}", sym.name);
-                }
-
-                crate_name = UNKNOWN.to_string();
             }
         }
 

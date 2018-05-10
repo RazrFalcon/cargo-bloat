@@ -61,7 +61,6 @@ Flags specific for `cargo-bloat`:
 --crates                Per crate bloatedness
 --filter CRATE          Filter functions by crate
 --split-std             Split the 'std' crate to original crates like core, alloc, etc.
---print-unknown         Print methods under the '[Unknown]' tag
 --full-fn               Print full function name with hash values
 -n NUM                  Number of lines to show, 0 to show all [default: 20]
 -w, --wide              Do not trim long function names

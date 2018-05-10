@@ -6,9 +6,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 ### Changed
+- A better crates resolving algorithm.
 - Remove std crates from the `std` group that was explicitly added as dependencies.
 - Cargo update to v0.26.
 - Do not collect C symbols when `--creates` flag is not set.
+
+### Removed
+- The `--print-unknown` flag.
 
 ## [0.3.0] - 2018-04-02
 ### Changed
