@@ -66,12 +66,6 @@ Flags specific for `cargo-bloat`:
 -w, --wide              Do not trim long function names
 ```
 
-### Correctness
-
-The results are not perfect since function names parsing is not perfect.
-Also, all non-Rust methods are skipped during crates resolving which moves jemalloc
-and any other C libraries to the `[Unknown]` section.
-
 ### License
 
 *cargo-bloat* is licensed under the MIT.
