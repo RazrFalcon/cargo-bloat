@@ -1,15 +1,13 @@
 extern crate cargo;
-extern crate docopt;
 extern crate env_logger;
 extern crate goblin;
 extern crate memmap;
 extern crate multimap;
 extern crate object;
 extern crate rustc_demangle;
-extern crate serde;
 extern crate term_size;
 #[macro_use] extern crate failure;
-#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate structopt;
 
 
 mod table;
@@ -20,6 +18,7 @@ use std::collections::HashMap;
 
 use object::Object;
 
+use cargo::core::resolver::Method;
 use cargo::core::shell::Shell;
 use cargo::core::Workspace;
 use cargo::ops;
@@ -27,64 +26,106 @@ use cargo::util::errors::CargoResult;
 use cargo::util;
 use cargo::{CliResult, Config};
 
+use structopt::clap::AppSettings;
+use structopt::StructOpt;
+
 use multimap::MultiMap;
 
 use table::Table;
 
 
-const USAGE: &'static str = "
-Find out what takes most of the space in your executable
+#[derive(StructOpt)]
+#[structopt(bin_name = "cargo")]
+enum Opts {
+    #[structopt(
+        name = "bloat",
+        raw(
+            setting = "AppSettings::UnifiedHelpMessage",
+            setting = "AppSettings::DeriveDisplayOrder",
+            setting = "AppSettings::DontCollapseArgsInUsage"
+        )
+    )]
+    /// Find out what takes most of the space in your executable
+    Bloat(Args),
+}
 
-Usage: cargo bloat [options]
+#[derive(StructOpt)]
+struct Args {
+    #[structopt(long = "bin", value_name = "NAME")]
+    /// Build only the specified binary
+    bin: Option<String>,
 
-Options:
-    -h, --help              Print this message
-    -V, --version           Print version info and exit
-    --bin NAME              Name of the bin target to run
-    --example NAME          Build only the specified example
-    --release               Build artifacts in release mode, with optimizations
-    --features FEATURES     Space-separated list of features to also build
-    --all-features          Build all available features
-    --no-default-features   Do not build the `default` feature
-    --target TRIPLE         Build for the target triple
-    --manifest-path PATH    Path to the manifest to analyze
-    -v, --verbose           Use verbose output
-    -q, --quiet             No output printed to stdout
-    --color WHEN            Coloring: auto, always, never
-    --frozen                Require Cargo.lock and cache are up to date
-    --locked                Require Cargo.lock is up to date
-    -Z FLAG ...             Unstable (nightly-only) flags to Cargo
-    --crates                Per crate bloatedness
-    --filter CRATE          Filter functions by crate
-    --split-std             Split the 'std' crate to original crates like core, alloc, etc.
-    --full-fn               Print full function name with hash values
-    -n NUM                  Number of lines to show, 0 to show all [default: 20]
-    -w, --wide              Do not trim long function names
-";
+    #[structopt(long = "example", value_name = "NAME")]
+    /// Build only the specified example
+    example: Option<String>,
 
-#[derive(Deserialize)]
-struct Flags {
-    flag_version: bool,
-    flag_bin: Option<String>,
-    flag_example: Option<String>,
-    flag_release: bool,
-    flag_features: Vec<String>,
-    flag_all_features: bool,
-    flag_no_default_features: bool,
-    flag_target: Option<String>,
-    flag_manifest_path: Option<String>,
-    flag_verbose: u32,
-    flag_quiet: Option<bool>,
-    flag_color: Option<String>,
-    flag_frozen: bool,
-    flag_locked: bool,
-    #[serde(rename = "flag_Z")] flag_z: Vec<String>,
-    flag_crates: bool,
-    flag_filter: Option<String>,
-    flag_split_std: bool,
-    flag_full_fn: bool,
-    flag_n: usize,
-    flag_wide: bool,
+    #[structopt(long = "release")]
+    /// Build artifacts in release mode, with optimizations
+    release: bool,
+
+    #[structopt(long = "features", value_name = "FEATURES")]
+    /// Space-separated list of features to activate
+    features: Option<String>,
+
+    #[structopt(long = "all-features")]
+    /// Activate all available features
+    all_features: bool,
+
+    #[structopt(long = "no-default-features")]
+    /// Do not activate the `default` feature
+    no_default_features: bool,
+
+    #[structopt(long = "target", value_name = "TARGET")]
+    /// Build for the target triple
+    target: Option<String>,
+
+    #[structopt(long = "verbose", short = "v", parse(from_occurrences))]
+    /// Use verbose output (-vv very verbose/build.rs output)
+    verbose: u32,
+
+    #[structopt(long = "quiet", short = "q")]
+    /// No output printed to stdout
+    quiet: Option<bool>,
+
+    #[structopt(long = "color", value_name = "WHEN")]
+    /// Coloring: auto, always, never
+    color: Option<String>,
+
+    #[structopt(long = "frozen")]
+    /// Require Cargo.lock and cache are up to date
+    frozen: bool,
+
+    #[structopt(long = "locked")]
+    /// Require Cargo.lock is up to date
+    locked: bool,
+
+    #[structopt(short = "Z", value_name = "FLAG")]
+    /// Unstable (nightly-only) flags to Cargo
+    unstable_flags: Vec<String>,
+
+    #[structopt(long = "crates")]
+    /// Per crate bloatedness
+    crates: bool,
+
+    #[structopt(long = "filter", value_name = "CRATE")]
+    /// Filter functions by crate
+    filter: Option<String>,
+
+    #[structopt(long = "split-std")]
+    /// Split the 'std' crate to original crates like core, alloc, etc.
+    split_std: bool,
+
+    #[structopt(long = "full-fn")]
+    /// Print full function name with hash values
+    full_fn: bool,
+
+    #[structopt(short = "n", default_value = "20", value_name = "NUM")]
+    /// Number of lines to show, 0 to show all [default: 20]
+    n: usize,
+
+    #[structopt(short = "w", long = "wide")]
+    /// Do not trim long function names
+    wide: bool,
 }
 
 struct SymbolData {
@@ -138,11 +179,11 @@ fn main() {
     let cwd = env::current_dir().expect("couldn't get the current directory of the process");
     let mut config = create_config(cwd);
 
-    let args: Vec<_> = env::args().collect();
-    let result = cargo::call_main_without_stdin(real_main, &mut config, USAGE, &args, false);
-    match result {
-        Err(e) => cargo::exit_with_error(e, &mut *config.shell()),
-        Ok(()) => {}
+    let Opts::Bloat(args) = Opts::from_args();
+
+    if let Err(e) = real_main(args, &mut config) {
+        let mut shell = Shell::new();
+        cargo::exit_with_error(e.into(), &mut shell)
     }
 }
 
@@ -154,21 +195,16 @@ fn create_config(path: path::PathBuf) -> Config {
     Config::new(shell, path, homedir)
 }
 
-fn real_main(flags: Flags, config: &mut Config) -> CliResult {
-    if flags.flag_version {
-        println!("cargo-bloat {}", env!("CARGO_PKG_VERSION"));
-        return Ok(());
-    }
+fn real_main(args: Args, config: &mut Config) -> CliResult {
+    let crate_data = process_crate(&args, config)?;
 
-    let crate_data = process_crate(&flags, config)?;
-
-    let mut table = if flags.flag_crates {
+    let mut table = if args.crates {
         Table::new(&["File", ".text", "Size", "Name"])
     } else {
         Table::new(&["File", ".text", "Size", "Crate", "Name"])
     };
 
-    let term_width = if !flags.flag_wide {
+    let term_width = if !args.wide {
         term_size::dimensions().map(|v| v.0)
     } else {
         None
@@ -176,16 +212,16 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
     table.set_width(term_width);
 
 
-    if flags.flag_crates {
-        print_crates(crate_data, &flags, &mut table);
+    if args.crates {
+        print_crates(crate_data, &args, &mut table);
     } else {
-        print_methods(crate_data, &flags, &mut table);
+        print_methods(crate_data, &args, &mut table);
     }
 
     println!();
     print!("{}", table);
 
-    if flags.flag_crates {
+    if args.crates {
         println!();
         println!("Note: numbers above are a result of guesswork. \
                   They are not 100% correct and never will be.");
@@ -194,48 +230,44 @@ fn real_main(flags: Flags, config: &mut Config) -> CliResult {
     Ok(())
 }
 
-fn process_crate(flags: &Flags, config: &mut Config) -> CargoResult<CrateData> {
+fn process_crate(args: &Args, config: &mut Config) -> CargoResult<CrateData> {
     config.configure(
-        flags.flag_verbose,
-        flags.flag_quiet,
-        &flags.flag_color,
-        flags.flag_frozen,
-        flags.flag_locked,
-        &flags.flag_z,
+        args.verbose,
+        args.quiet,
+        &args.color,
+        args.frozen,
+        args.locked,
+        &args.unstable_flags,
     )?;
 
-    let root = util::important_paths::find_root_manifest_for_wd(
-        flags.flag_manifest_path.clone(),
-        config.cwd()
-    )?;
+    let root = util::important_paths::find_root_manifest_for_wd(config.cwd())?;
     let workspace = Workspace::new(&root, config)?;
 
     let mut bins = Vec::new();
     let mut examples = Vec::new();
 
+    let features = Method::split_features(&args.features.clone().into_iter().collect::<Vec<_>>());
+
     let mut opt = ops::CompileOptions::default(&config, ops::CompileMode::Build);
-    opt.features = &flags.flag_features;
-    opt.all_features = flags.flag_all_features;
-    opt.no_default_features = flags.flag_no_default_features;
-    opt.release = flags.flag_release;
+    opt.features = features;
+    opt.all_features = args.all_features;
+    opt.no_default_features = args.no_default_features;
+    opt.release = args.release;
+    opt.target = args.target.clone();
 
-    if let Some(ref target) = flags.flag_target {
-        opt.target = Some(target);
-    }
-
-    if let Some(ref name) = flags.flag_bin {
+    if let Some(ref name) = args.bin {
         bins.push(name.clone());
-    } else if let Some(ref name) = flags.flag_example {
+    } else if let Some(ref name) = args.example {
         examples.push(name.clone());
     }
 
-    if flags.flag_bin.is_some() || flags.flag_example.is_some() {
+    if args.bin.is_some() || args.example.is_some() {
         opt.filter = ops::CompileFilter::new(
             false,
-            &bins[..], false,
-            &[], false,
-            &examples[..], false,
-            &[], false,
+            bins.clone(), false,
+            Vec::new(), false,
+            examples.clone(), false,
+            Vec::new(), false,
             false,
         );
     }
@@ -388,7 +420,7 @@ fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
     Ok(d)
 }
 
-fn print_methods(mut d: CrateData, flags: &Flags, table: &mut Table) {
+fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
     fn push_row(table: &mut Table, percent_file: f64, percent_text: f64, size: u64,
                 crate_name: String, name: String) {
         let percent_file_s = format_percent(percent_file);
@@ -402,15 +434,15 @@ fn print_methods(mut d: CrateData, flags: &Flags, table: &mut Table) {
     let dd = &d.data;
     let mut other_size = dd.text_size;
 
-    let n = if flags.flag_n == 0 { dd.symbols.len() } else { flags.flag_n };
+    let n = if args.n == 0 { dd.symbols.len() } else { args.n };
 
     for sym in dd.symbols.iter().rev() {
         let percent_file = sym.size as f64 / dd.file_size as f64 * 100.0;
         let percent_text = sym.size as f64 / dd.text_size as f64 * 100.0;
 
-        let (mut crate_name, is_exact) = crate_from_sym(&d, flags, &sym.name);
+        let (mut crate_name, is_exact) = crate_from_sym(&d, args, &sym.name);
 
-        if let Some(ref name) = flags.flag_filter {
+        if let Some(ref name) = args.filter {
             if name != &crate_name {
                 continue;
             }
@@ -425,7 +457,7 @@ fn print_methods(mut d: CrateData, flags: &Flags, table: &mut Table) {
         let mut name = sym.name.clone();
 
         // crate::mod::fn::h5fbe0f2f0b5c7342 -> crate::mod::fn
-        if !flags.flag_full_fn {
+        if !args.full_fn {
             if let Some(pos) = name.bytes().rposition(|b| b == b':') {
                 name.drain((pos - 1)..);
             }
@@ -500,7 +532,7 @@ fn parse_crate_from_sym(sym: &str) -> String {
     crate_name
 }
 
-fn crate_from_sym(d: &CrateData, flags: &Flags, sym: &str) -> (String, bool) {
+fn crate_from_sym(d: &CrateData, flags: &Args, sym: &str) -> (String, bool) {
     const UNKNOWN: &str = "[Unknown]";
 
     let mut is_exact = true;
@@ -592,7 +624,7 @@ fn crate_from_sym(d: &CrateData, flags: &Flags, sym: &str) -> (String, bool) {
         }
 
 
-    if !flags.flag_split_std {
+    if !flags.split_std {
         if d.std_crates.contains(&crate_name) {
             crate_name = "std".to_string();
         }
@@ -601,7 +633,7 @@ fn crate_from_sym(d: &CrateData, flags: &Flags, sym: &str) -> (String, bool) {
     (crate_name, is_exact)
 }
 
-fn print_crates(d: CrateData, flags: &Flags, table: &mut Table) {
+fn print_crates(d: CrateData, flags: &Args, table: &mut Table) {
     let dd = &d.data;
     let mut sizes = HashMap::new();
 
@@ -626,7 +658,7 @@ fn print_crates(d: CrateData, flags: &Flags, table: &mut Table) {
         table.push(&[percent_file_s, percent_text_s, size_s, name]);
     }
 
-    let n = if flags.flag_n == 0 { list.len() } else { flags.flag_n };
+    let n = if flags.n == 0 { list.len() } else { flags.n };
     for &(k, v) in list.iter().rev().take(n) {
         let percent_file = *v as f64 / dd.file_size as f64 * 100.0;
         let percent_text = *v as f64 / dd.text_size as f64 * 100.0;
