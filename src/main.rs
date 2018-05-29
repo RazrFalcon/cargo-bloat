@@ -462,6 +462,7 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
         FilterBy::None
     };
 
+    let mut filter_total = 0;
 
     for sym in dd.symbols.iter().rev() {
         let percent_file = sym.size as f64 / dd.file_size as f64 * 100.0;
@@ -498,10 +499,10 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
             }
         }
 
-        push_row(table, percent_file, percent_text, sym.size, crate_name, name);
+        filter_total += sym.size;
 
-        if n != 0 && table.rows_count() == n {
-            break;
+        if n == 0 || table.rows_count() <= n {
+            push_row(table, percent_file, percent_text, sym.size, crate_name, name);
         }
     }
 
@@ -512,6 +513,13 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
         let size_s = format_size(other_size);
         let name_s = format!("[{} Others]", dd.symbols.len() - lines_len);
         table.insert(0, &[&percent_file_s, &percent_text_s, &size_s, "", &name_s]);
+    }
+
+    if let FilterBy::None = filter {} else {
+        let percent_file_s = filter_total as f64 / dd.file_size as f64 * 100.0;
+        let percent_text_s = filter_total as f64 / dd.text_size as f64 * 100.0;
+        let name = format!("filtered data size");
+        push_row(table, percent_file_s, percent_text_s, filter_total, String::new(), name);
     }
 
     {

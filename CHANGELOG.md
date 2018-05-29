@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 ### Added
 - An ability to filter by regexp.
+- A *filtered data size* row into the main table during filtering.
 
 ### Changed
 - Cargo updated to v0.27.
