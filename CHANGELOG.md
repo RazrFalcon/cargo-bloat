@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.5.0] - 2018-05-29
 ### Added
 - An ability to filter by regexp.
 - A *filtered data size* row into the main table during filtering.
@@ -56,9 +58,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - When running on an unsupported OS you will get an error and not a random panic.
 - The table has a dynamic column width now.
 
-[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/RazrFalcon/cargo-bloat/compare/0.3.0...0.4.0
-[0.3.0]: https://github.com/RazrFalcon/cargo-bloat/compare/0.2.2...0.3.0
-[0.2.2]: https://github.com/RazrFalcon/cargo-bloat/compare/0.2.1...0.2.2
-[0.2.1]: https://github.com/RazrFalcon/cargo-bloat/compare/0.2.0...0.2.1
-[0.2.0]: https://github.com/RazrFalcon/cargo-bloat/compare/0.1.0...0.2.0
+[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.2.2...v0.3.0
+[0.2.2]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.1.0...v0.2.0
