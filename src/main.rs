@@ -462,7 +462,10 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
         FilterBy::None
     };
 
+    let has_filter = if let FilterBy::None = filter { false } else { true };
+
     let mut filter_total = 0;
+    let mut matched_count = 0;
 
     for sym in dd.symbols.iter().rev() {
         let percent_file = sym.size as f64 / dd.file_size as f64 * 100.0;
@@ -500,6 +503,7 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
         }
 
         filter_total += sym.size;
+        matched_count += 1;
 
         if n == 0 || table.rows_count() <= n {
             push_row(table, percent_file, percent_text, sym.size, crate_name, name);
@@ -507,22 +511,25 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
     }
 
     {
-        let lines_len = table.rows_count();
+        let others_count = if has_filter {
+            matched_count - table.rows_count()
+        } else {
+            dd.symbols.len() - table.rows_count()
+        };
+
         let percent_file_s = format_percent(other_size as f64 / dd.file_size as f64 * 100.0);
         let percent_text_s = format_percent(other_size as f64 / dd.text_size as f64 * 100.0);
         let size_s = format_size(other_size);
-        let name_s = format!("[{} Others]", dd.symbols.len() - lines_len);
+        let name_s = format!("[{} Others]", others_count);
         table.insert(0, &[&percent_file_s, &percent_text_s, &size_s, "", &name_s]);
     }
 
-    if let FilterBy::None = filter {} else {
+    if has_filter {
         let percent_file_s = filter_total as f64 / dd.file_size as f64 * 100.0;
         let percent_text_s = filter_total as f64 / dd.text_size as f64 * 100.0;
-        let name = format!("filtered data size");
+        let name = format!("filtered data size, the file size is {}", format_size(dd.file_size));
         push_row(table, percent_file_s, percent_text_s, filter_total, String::new(), name);
-    }
-
-    {
+    } else {
         let percent_file = dd.text_size as f64 / dd.file_size as f64 * 100.0;
         let name = format!(".text section size, the file size is {}", format_size(dd.file_size));
         push_row(table, percent_file, 100.0, dd.text_size, String::new(), name);

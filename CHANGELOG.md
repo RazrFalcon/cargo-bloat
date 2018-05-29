@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 - Cargo updated to v0.27.
+- The *Others* row will show a number of functions that was filtered but not shown.
+  Previously, it was showing the total functions amount.
 
 ## [0.4.0] - 2018-05-10
 ### Added
