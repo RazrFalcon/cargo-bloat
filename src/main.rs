@@ -4,6 +4,7 @@ extern crate goblin;
 extern crate memmap;
 extern crate multimap;
 extern crate object;
+extern crate regex;
 extern crate rustc_demangle;
 extern crate term_size;
 #[macro_use] extern crate failure;
@@ -28,6 +29,8 @@ use cargo::{CliResult, Config};
 
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
+
+use regex::Regex;
 
 use multimap::MultiMap;
 
@@ -107,7 +110,7 @@ struct Args {
     /// Per crate bloatedness
     crates: bool,
 
-    #[structopt(long = "filter", value_name = "CRATE")]
+    #[structopt(long = "filter", value_name = "CRATE|REGEXP")]
     /// Filter functions by crate
     filter: Option<String>,
 
@@ -120,7 +123,7 @@ struct Args {
     full_fn: bool,
 
     #[structopt(short = "n", default_value = "20", value_name = "NUM")]
-    /// Number of lines to show, 0 to show all [default: 20]
+    /// Number of lines to show, 0 to show all
     n: usize,
 
     #[structopt(short = "w", long = "wide")]
@@ -436,17 +439,35 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
 
     let n = if args.n == 0 { dd.symbols.len() } else { args.n };
 
+    enum FilterBy {
+        None,
+        Crate(String),
+        Regex(Regex),
+    }
+
+    let filter = if let Some(ref text) = args.filter {
+        if d.std_crates.contains(text) || d.dep_crates.contains(text) {
+            FilterBy::Crate(text.clone())
+        } else {
+            match Regex::new(text) {
+                Ok(re) => FilterBy::Regex(re),
+                Err(_) => {
+                    eprintln!("Warning: the filter value contains an unknown crate \
+                               or an invalid regexp. Ignored.");
+                    FilterBy::None
+                }
+            }
+        }
+    } else {
+        FilterBy::None
+    };
+
+
     for sym in dd.symbols.iter().rev() {
         let percent_file = sym.size as f64 / dd.file_size as f64 * 100.0;
         let percent_text = sym.size as f64 / dd.text_size as f64 * 100.0;
 
         let (mut crate_name, is_exact) = crate_from_sym(&d, args, &sym.name);
-
-        if let Some(ref name) = args.filter {
-            if name != &crate_name {
-                continue;
-            }
-        }
 
         if !is_exact {
             crate_name.push('?');
@@ -460,6 +481,20 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
         if !args.full_fn {
             if let Some(pos) = name.bytes().rposition(|b| b == b':') {
                 name.drain((pos - 1)..);
+            }
+        }
+
+        match filter {
+            FilterBy::None => {}
+            FilterBy::Crate(ref crate_name_f) => {
+                if crate_name_f != &crate_name {
+                    continue;
+                }
+            }
+            FilterBy::Regex(ref re) => {
+                if !re.is_match(&name) {
+                    continue;
+                }
             }
         }
 
