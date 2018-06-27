@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-bloat"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "cargo 0.27.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.5.10 (registry+https://github.com/rust-lang/crates.io-index)",
