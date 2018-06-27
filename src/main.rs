@@ -144,6 +144,7 @@ struct Data {
 }
 
 struct CrateData {
+    exe_path: String,
     data: Data,
     std_crates: Vec<String>,
     dep_crates: Vec<String>,
@@ -201,6 +202,8 @@ fn create_config(path: path::PathBuf) -> Config {
 
 fn real_main(args: Args, config: &mut Config) -> CliResult {
     let crate_data = process_crate(&args, config)?;
+
+    println!("   Analyzing {}", crate_data.exe_path);
 
     let mut table = if args.crates {
         Table::new(&["File", ".text", "Size", "Name"])
@@ -308,6 +311,10 @@ fn process_crate(args: &Args, config: &mut Config) -> CargoResult<CrateData> {
 
     let deps_symbols = collect_deps_symbols(rlib_paths)?;
 
+    let prepare_path = |path: &path::Path| {
+        path.strip_prefix(workspace.root()).unwrap_or(path).to_str().unwrap().to_string()
+    };
+
     // We have to check for `cdylib` libraries using `TargetKind` and not file extension,
     // because ProcMacro will also be build as `cdylib`. But they will have `LibKind::ProcMacro`.
     let cdylib = manifest::TargetKind::Lib(vec![manifest::LibKind::Other("cdylib".to_string())]);
@@ -315,6 +322,7 @@ fn process_crate(args: &Args, config: &mut Config) -> CargoResult<CrateData> {
         for (target, path) in lib {
             if *target.kind() == cdylib {
                 return Ok(CrateData {
+                    exe_path: prepare_path(&path),
                     data: collect_self_data(&path)?,
                     std_crates,
                     dep_crates,
@@ -326,6 +334,7 @@ fn process_crate(args: &Args, config: &mut Config) -> CargoResult<CrateData> {
 
     if !comp.binaries.is_empty() {
         return Ok(CrateData {
+            exe_path: prepare_path(&comp.binaries[0]),
             data: collect_self_data(&comp.binaries[0])?,
             std_crates,
             dep_crates,

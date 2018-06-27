@@ -19,6 +19,7 @@ Get a list of the biggest functions in the release build:
 ```
 % cargo bloat --release -n 10
     Finished release [optimized] target(s) in 0.2 secs
+   Analyzing target/release/cargo-bloat
 
  File  .text    Size                 Crate Name
  0.0%   0.0%      0B                       [14819 Others]
@@ -40,6 +41,7 @@ Get a list of the biggest dependencies in the release build:
 ```
 % cargo bloat --release --crates -n 10
     Finished release [optimized] target(s) in 0.2 secs
+   Analyzing target/release/cargo-bloat
 
  File  .text     Size Name
 10.8%  27.9%   1.6MiB cargo
@@ -61,6 +63,7 @@ Get a list of the biggest functions in the release build filtered by the regexp:
 ```
 % cargo bloat --release --filter '^__' -n 10
     Finished release [optimized] target(s) in 0.2 secs
+   Analyzing target/release/cargo-bloat
 
 File .text    Size         Crate Name
 0.0%  0.0%      0B               [20 Others]

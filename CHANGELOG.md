@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- Print path to the analyzed binary.
+
 ### Fixed
 - Filter `cdylib` libraries by the `TargetKind` and not by the file extension.
 
