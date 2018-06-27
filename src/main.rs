@@ -489,8 +489,6 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
             crate_name.push('?');
         }
 
-        other_size -= sym.size;
-
         let mut name = sym.name.clone();
 
         // crate::mod::fn::h5fbe0f2f0b5c7342 -> crate::mod::fn
@@ -518,6 +516,7 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
         matched_count += 1;
 
         if n == 0 || table.rows_count() <= n {
+            other_size -= sym.size;
             push_row(table, percent_file, percent_text, sym.size, crate_name, name);
         }
     }

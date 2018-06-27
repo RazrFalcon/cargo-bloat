@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 - Filter `cdylib` libraries by the `TargetKind` and not by the file extension.
+- *Others* size.
 
 ## [0.5.0] - 2018-05-29
 ### Added
