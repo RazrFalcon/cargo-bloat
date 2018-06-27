@@ -19,6 +19,7 @@ use std::collections::HashMap;
 
 use object::Object;
 
+use cargo::core::manifest;
 use cargo::core::resolver::Method;
 use cargo::core::shell::Shell;
 use cargo::core::Workspace;
@@ -307,10 +308,12 @@ fn process_crate(args: &Args, config: &mut Config) -> CargoResult<CrateData> {
 
     let deps_symbols = collect_deps_symbols(rlib_paths)?;
 
+    // We have to check for `cdylib` libraries using `TargetKind` and not file extension,
+    // because ProcMacro will also be build as `cdylib`. But they will have `LibKind::ProcMacro`.
+    let cdylib = manifest::TargetKind::Lib(vec![manifest::LibKind::Other("cdylib".to_string())]);
     for (_, lib) in comp.libraries {
-        for (_, path) in lib {
-            let path_str = path.to_str().unwrap();
-            if path_str.ends_with(".so") || path_str.ends_with(".dylib") {
+        for (target, path) in lib {
+            if *target.kind() == cdylib {
                 return Ok(CrateData {
                     data: collect_self_data(&path)?,
                     std_crates,
