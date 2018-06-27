@@ -447,8 +447,6 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
     d.data.symbols.sort_by_key(|v| v.size);
 
     let dd = &d.data;
-    let mut other_size = dd.text_size;
-
     let n = if args.n == 0 { dd.symbols.len() } else { args.n };
 
     enum FilterBy {
@@ -476,6 +474,7 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
 
     let has_filter = if let FilterBy::None = filter { false } else { true };
 
+    let mut other_total = 0;
     let mut filter_total = 0;
     let mut matched_count = 0;
 
@@ -516,8 +515,9 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
         matched_count += 1;
 
         if n == 0 || table.rows_count() < n {
-            other_size -= sym.size;
             push_row(table, percent_file, percent_text, sym.size, crate_name, name);
+        } else {
+            other_total += sym.size;
         }
     }
 
@@ -528,9 +528,9 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
             dd.symbols.len() - table.rows_count()
         };
 
-        let percent_file_s = format_percent(other_size as f64 / dd.file_size as f64 * 100.0);
-        let percent_text_s = format_percent(other_size as f64 / dd.text_size as f64 * 100.0);
-        let size_s = format_size(other_size);
+        let percent_file_s = format_percent(other_total as f64 / dd.file_size as f64 * 100.0);
+        let percent_text_s = format_percent(other_total as f64 / dd.text_size as f64 * 100.0);
+        let size_s = format_size(other_total);
         let name_s = format!("[{} Others]", others_count);
         table.insert(0, &[&percent_file_s, &percent_text_s, &size_s, "", &name_s]);
     }
