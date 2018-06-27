@@ -515,7 +515,7 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
         filter_total += sym.size;
         matched_count += 1;
 
-        if n == 0 || table.rows_count() <= n {
+        if n == 0 || table.rows_count() < n {
             other_size -= sym.size;
             push_row(table, percent_file, percent_text, sym.size, crate_name, name);
         }

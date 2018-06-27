@@ -33,7 +33,6 @@ Get a list of the biggest functions in the release build:
  0.1%   0.3% 20.5KiB                 cargo cargo::util::toml::targets::targets
  0.1%   0.3% 17.9KiB                goblin <goblin::mach::load_command::CommandVariant as scroll...
  0.1%   0.3% 17.7KiB                 cargo <cargo::util::toml::_IMPL_DESERIALIZE_FOR_TomlManifes...
- 0.1%   0.3% 17.6KiB                 cargo <cargo::util::toml::_IMPL_DESERIALIZE_FOR_TomlProject...
 38.6% 100.0%  5.8MiB                       .text section size, the file size is 14.9MiB
 ```
 
@@ -77,7 +76,6 @@ File .text    Size         Crate Name
 0.0%  0.0%    193B backtrace_sys __rbt_backtrace_vector_grow
 0.0%  0.0%    158B backtrace_sys __rbt_backtrace_open
 0.0%  0.0%    156B           std __rust_start_panic
-0.0%  0.0%    132B           std __rust_maybe_catch_panic
 0.1%  0.2% 14.5KiB               filtered data size, the file size is 14.9MiB
 ```
 
