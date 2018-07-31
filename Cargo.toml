@@ -1,6 +1,6 @@
 [package]
 name = "cargo-bloat"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Reizner Evgeniy <razrfalcon@gmail.com>"]
 description = "Find out what takes most of the space in your executable."
 repository = "https://github.com/RazrFalcon/cargo-bloat"
@@ -8,10 +8,10 @@ readme = "README.md"
 license = "MIT"
 
 [dependencies]
-cargo = "0.27"
+cargo = "0.28"
 env_logger = "0.5.1"
 failure = "0.1.1"
-goblin = "0.0.15"
+goblin = "0.0.15" # the same version as in `object`
 memmap = "0.6"
 multimap = "0.4"
 object = "0.9"

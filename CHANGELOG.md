@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.2] - 2018-07-31
+### Changed
+- Cargo updated to v0.28.
+
 ## [0.5.1] - 2018-06-27
 ### Added
 - Print path to the analyzed binary.

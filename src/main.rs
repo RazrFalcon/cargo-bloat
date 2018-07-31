@@ -24,6 +24,7 @@ use cargo::core::resolver::Method;
 use cargo::core::shell::Shell;
 use cargo::core::Workspace;
 use cargo::ops;
+use cargo::core::compiler;
 use cargo::util::errors::CargoResult;
 use cargo::util;
 use cargo::{CliResult, Config};
@@ -40,6 +41,7 @@ use table::Table;
 
 #[derive(StructOpt)]
 #[structopt(bin_name = "cargo")]
+#[structopt(author = "")]
 enum Opts {
     #[structopt(
         name = "bloat",
@@ -82,6 +84,10 @@ struct Args {
     #[structopt(long = "target", value_name = "TARGET")]
     /// Build for the target triple
     target: Option<String>,
+
+    #[structopt(long = "target-dir", value_name = "DIRECTORY")]
+    /// Directory for all generated artifacts
+    target_dir: Option<String>,
 
     #[structopt(long = "verbose", short = "v", parse(from_occurrences))]
     /// Use verbose output (-vv very verbose/build.rs output)
@@ -238,12 +244,14 @@ fn real_main(args: Args, config: &mut Config) -> CliResult {
 }
 
 fn process_crate(args: &Args, config: &mut Config) -> CargoResult<CrateData> {
+    let target_dir = args.target_dir.clone().map(path::PathBuf::from);
     config.configure(
         args.verbose,
         args.quiet,
         &args.color,
         args.frozen,
         args.locked,
+        &target_dir,
         &args.unstable_flags,
     )?;
 
@@ -254,13 +262,14 @@ fn process_crate(args: &Args, config: &mut Config) -> CargoResult<CrateData> {
     let mut examples = Vec::new();
 
     let features = Method::split_features(&args.features.clone().into_iter().collect::<Vec<_>>());
+    let features: Vec<_> = features.iter().map(|s| s.as_str().to_string()).collect();
 
-    let mut opt = ops::CompileOptions::default(&config, ops::CompileMode::Build);
+    let mut opt = ops::CompileOptions::new(&config, compiler::CompileMode::Build)?;
     opt.features = features;
     opt.all_features = args.all_features;
     opt.no_default_features = args.no_default_features;
-    opt.release = args.release;
-    opt.target = args.target.clone();
+    opt.build_config.release = args.release;
+    opt.build_config.requested_target = args.target.clone();
 
     if let Some(ref name) = args.bin {
         bins.push(name.clone());
