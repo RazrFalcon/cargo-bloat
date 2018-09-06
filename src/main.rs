@@ -1,5 +1,3 @@
-extern crate cargo;
-extern crate env_logger;
 extern crate goblin;
 extern crate memmap;
 extern crate multimap;
@@ -7,27 +5,17 @@ extern crate object;
 extern crate regex;
 extern crate rustc_demangle;
 extern crate term_size;
-#[macro_use] extern crate failure;
+extern crate serde_json;
+extern crate serde;
+#[macro_use] extern crate serde_derive;
 #[macro_use] extern crate structopt;
 
 
-mod table;
-
-
-use std::{env, fs, path, str};
+use std::{fs, fmt, path, str};
 use std::collections::HashMap;
+use std::process::{self, Command};
 
 use object::Object;
-
-use cargo::core::manifest;
-use cargo::core::resolver::Method;
-use cargo::core::shell::Shell;
-use cargo::core::Workspace;
-use cargo::ops;
-use cargo::core::compiler;
-use cargo::util::errors::CargoResult;
-use cargo::util;
-use cargo::{CliResult, Config};
 
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
@@ -36,6 +24,7 @@ use regex::Regex;
 
 use multimap::MultiMap;
 
+mod table;
 use table::Table;
 
 
@@ -89,18 +78,6 @@ struct Args {
     /// Directory for all generated artifacts
     target_dir: Option<String>,
 
-    #[structopt(long = "verbose", short = "v", parse(from_occurrences))]
-    /// Use verbose output (-vv very verbose/build.rs output)
-    verbose: u32,
-
-    #[structopt(long = "quiet", short = "q")]
-    /// No output printed to stdout
-    quiet: Option<bool>,
-
-    #[structopt(long = "color", value_name = "WHEN")]
-    /// Coloring: auto, always, never
-    color: Option<String>,
-
     #[structopt(long = "frozen")]
     /// Require Cargo.lock and cache are up to date
     frozen: bool,
@@ -108,10 +85,6 @@ struct Args {
     #[structopt(long = "locked")]
     /// Require Cargo.lock is up to date
     locked: bool,
-
-    #[structopt(short = "Z", value_name = "FLAG")]
-    /// Unstable (nightly-only) flags to Cargo
-    unstable_flags: Vec<String>,
 
     #[structopt(long = "crates")]
     /// Per crate bloatedness
@@ -157,59 +130,98 @@ struct CrateData {
     deps_symbols: MultiMap<String, String>, // symbol, crate
 }
 
-#[derive(Fail, Debug)]
+#[derive(Deserialize)]
+struct Target {
+    name: String,
+    kind: Vec<String>,
+    #[serde(skip)]
+    __do_not_match_exhaustively: (),
+}
+
+#[derive(Deserialize)]
+struct Metadata {
+    target: Option<Target>,
+    filenames: Option<Vec<String>>,
+    #[serde(skip)]
+    __do_not_match_exhaustively: (),
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum ArtifactKind {
+    Binary,
+    Library,
+    CDynLib,
+}
+
+#[derive(Debug)]
+struct Artifact {
+    kind: ArtifactKind,
+    name: String, // TODO: Rc?
+    path: path::PathBuf,
+}
+
+#[derive(Debug)]
 enum Error {
-    #[fail(display = "{}", _0)]
-    Io(::std::io::Error),
-
-    #[fail(display = "{}", _0)]
-    String(String),
+    StdDirNotFound(path::PathBuf),
+    RustcFailed,
+    CargoFailed,
+    UnsupportedCrateType,
+    OpenFailed(path::PathBuf),
+    InvalidCargoOutput,
+    Object(path::PathBuf, String),
+    Goblin(path::PathBuf, String),
 }
 
-impl From<::std::io::Error> for Error {
-    fn from(value: ::std::io::Error) -> Error {
-        Error::Io(value)
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::StdDirNotFound(ref path) => {
+                write!(f, "failed to find a dir with std libraries. Expected location: {:?}", path)
+            }
+            Error::RustcFailed => {
+                write!(f, "failed to execute 'rustc'. It should be in the PATH")
+            }
+            Error::CargoFailed => {
+                write!(f, "failed to execute 'cargo'. Probably a build error")
+            }
+            Error::UnsupportedCrateType => {
+                write!(f, "only 'bin' and 'cdylib' crate types are supported")
+            }
+            Error::OpenFailed(ref path) => {
+                write!(f, "failed to open a file '{:?}'", path)
+            }
+            Error::InvalidCargoOutput => {
+                write!(f, "failed to parse cargo's output")
+            }
+            Error::Object(ref path, ref msg) => {
+                write!(f, "'object' failed to parse '{:?}' cause '{}'", path, msg)
+            }
+            Error::Goblin(ref path, ref msg) => {
+                write!(f, "'goblin' failed to parse '{:?}' cause '{}'", path, msg)
+            }
+        }
     }
 }
-
-impl<'a> From<&'a str> for Error {
-    fn from(value: &str) -> Error {
-        Error::String(value.to_string())
-    }
-}
-
 
 fn main() {
     if cfg!(not(unix)) {
         eprintln!("This OS is not supported.");
-        std::process::exit(1);
+        process::exit(1);
     }
-
-    env_logger::init();
-
-    let cwd = env::current_dir().expect("couldn't get the current directory of the process");
-    let mut config = create_config(cwd);
 
     let Opts::Bloat(args) = Opts::from_args();
 
-    if let Err(e) = real_main(args, &mut config) {
-        let mut shell = Shell::new();
-        cargo::exit_with_error(e.into(), &mut shell)
-    }
-}
+    println!("Compiling ...");
 
-fn create_config(path: path::PathBuf) -> Config {
-    let shell = Shell::new();
-    let homedir = util::config::homedir(&path).expect(
-        "Cargo couldn't find your home directory. \
-         This probably means that $HOME was not set.");
-    Config::new(shell, path, homedir)
-}
+    let crate_data = match process_crate(&args) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: {}.", e);
+            process::exit(1);
+        }
+    };
 
-fn real_main(args: Args, config: &mut Config) -> CliResult {
-    let crate_data = process_crate(&args, config)?;
-
-    println!("   Analyzing {}", crate_data.exe_path);
+    println!("Analyzing {} ...", crate_data.exe_path);
 
     let mut table = if args.crates {
         Table::new(&["File", ".text", "Size", "Name"])
@@ -239,74 +251,105 @@ fn real_main(args: Args, config: &mut Config) -> CliResult {
         println!("Note: numbers above are a result of guesswork. \
                   They are not 100% correct and never will be.");
     }
-
-    Ok(())
 }
 
-fn process_crate(args: &Args, config: &mut Config) -> CargoResult<CrateData> {
-    let target_dir = args.target_dir.clone().map(path::PathBuf::from);
-    config.configure(
-        args.verbose,
-        args.quiet,
-        &args.color,
-        args.frozen,
-        args.locked,
-        &target_dir,
-        &args.unstable_flags,
-    )?;
+fn stdlibs_dir(target_triple: &str) -> Result<path::PathBuf, Error> {
+    let output = Command::new("rustc")
+        .arg("--print=sysroot").output()
+        .map_err(|_| Error::RustcFailed)?;
 
-    let root = util::important_paths::find_root_manifest_for_wd(config.cwd())?;
-    let workspace = Workspace::new(&root, config)?;
+    let stdout = str::from_utf8(&output.stdout).unwrap();
 
-    let mut bins = Vec::new();
-    let mut examples = Vec::new();
+    // From the `cargo` itself (this a one long link):
+    // https://github.com/rust-lang/cargo/blob/065e3ef98d3edbce5c9e66d927d9ac9944cc6639
+    // /src/cargo/core/compiler/build_context/target_info.rs#L130..L133
+    let mut rustlib = path::PathBuf::from(stdout.trim());
+    rustlib.push("lib");
+    rustlib.push("rustlib");
+    rustlib.push(target_triple);
+    rustlib.push("lib");
 
-    let features = Method::split_features(&args.features.clone().into_iter().collect::<Vec<_>>());
-    let features: Vec<_> = features.iter().map(|s| s.as_str().to_string()).collect();
-
-    let mut opt = ops::CompileOptions::new(&config, compiler::CompileMode::Build)?;
-    opt.features = features;
-    opt.all_features = args.all_features;
-    opt.no_default_features = args.no_default_features;
-    opt.build_config.release = args.release;
-    opt.build_config.requested_target = args.target.clone();
-
-    if let Some(ref name) = args.bin {
-        bins.push(name.clone());
-    } else if let Some(ref name) = args.example {
-        examples.push(name.clone());
+    if !rustlib.exists() {
+        return Err(Error::StdDirNotFound(rustlib));
     }
 
-    if args.bin.is_some() || args.example.is_some() {
-        opt.filter = ops::CompileFilter::new(
-            false,
-            bins.clone(), false,
-            Vec::new(), false,
-            examples.clone(), false,
-            Vec::new(), false,
-            false,
-        );
+    Ok(rustlib)
+}
+
+fn get_default_target() -> Result<String, Error> {
+    let output = Command::new("rustc").arg("-Vv").output().map_err(|_| Error::RustcFailed)?;
+
+    let stdout = str::from_utf8(&output.stdout).unwrap();
+    for line in stdout.lines() {
+        if line.starts_with("host:") {
+            return Ok(line[6..].to_owned())
+        }
     }
 
-    let comp = ops::compile(&workspace, &opt)?;
+    Err(Error::RustcFailed)
+}
 
-    let mut rlib_paths = collect_rlib_paths(&comp.deps_output);
-    let mut dep_crates: Vec<String> = rlib_paths.iter().map(|v| v.0.clone()).collect();
+fn process_crate(args: &Args) -> Result<CrateData, Error> {
+    let output = Command::new("cargo")
+        .args(&get_cargo_args(args))
+        .output()
+        .map_err(|_| Error::RustcFailed)?;
+
+    if !output.status.success() {
+        return Err(Error::CargoFailed);
+    }
+
+    let mut artifacts = Vec::new();
+    let stdout = str::from_utf8(&output.stdout).unwrap();
+    for line in stdout.lines() {
+        let meta: Metadata = serde_json::from_str(line).map_err(|_| Error::InvalidCargoOutput)?;
+
+        if let Some(target) = meta.target {
+            if let Some(ref filenames) = meta.filenames {
+                for path in filenames {
+                    for kind_str in &target.kind {
+                        let kind = match kind_str.as_str() {
+                            "bin" => ArtifactKind::Binary,
+                            "lib" => ArtifactKind::Library,
+                            "cdylib" => ArtifactKind::CDynLib,
+                            _ => continue,
+                        };
+
+                        artifacts.push({
+                            Artifact {
+                                kind,
+                                name: target.name.replace("-", "_"),
+                                path: path::PathBuf::from(&path),
+                            }
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    let default_target = get_default_target()?;
+    let target_triple = args.target.clone().unwrap_or_else(|| default_target);
+
+    let target_dylib_path = stdlibs_dir(&target_triple)?;
+
+    let mut rlib_paths = Vec::new();
+
+    let mut dep_crates = Vec::new();
+    for artifact in &artifacts {
+        dep_crates.push(artifact.name.clone());
+
+        if artifact.kind == ArtifactKind::Library {
+            rlib_paths.push((artifact.name.clone(), artifact.path.clone()));
+        }
+    }
+
     dep_crates.dedup();
-
-    let mut crate_name = workspace.current().unwrap().name().to_string();
-    crate_name = crate_name.replace("-", "_");
-    dep_crates.push(crate_name);
-
     dep_crates.sort();
 
-    let mut std_crates = Vec::new();
-    if let Some(path) = comp.target_dylib_path {
-        let paths = collect_rlib_paths(&path);
-        std_crates = paths.iter().map(|v| v.0.clone()).collect();
-
-        rlib_paths.extend_from_slice(&paths);
-    }
+    let std_paths = collect_rlib_paths(&target_dylib_path);
+    let mut std_crates: Vec<String> = std_paths.iter().map(|v| v.0.clone()).collect();
+    rlib_paths.extend_from_slice(&std_paths);
     std_crates.sort();
 
     // Remove std crates that was explicitly added as dependencies.
@@ -321,37 +364,62 @@ fn process_crate(args: &Args, config: &mut Config) -> CargoResult<CrateData> {
     let deps_symbols = collect_deps_symbols(rlib_paths)?;
 
     let prepare_path = |path: &path::Path| {
-        path.strip_prefix(workspace.root()).unwrap_or(path).to_str().unwrap().to_string()
+        path.to_str().unwrap().to_string()
     };
 
-    // We have to check for `cdylib` libraries using `TargetKind` and not file extension,
-    // because ProcMacro will also be build as `cdylib`. But they will have `LibKind::ProcMacro`.
-    let cdylib = manifest::TargetKind::Lib(vec![manifest::LibKind::Other("cdylib".to_string())]);
-    for (_, lib) in comp.libraries {
-        for (target, path) in lib {
-            if *target.kind() == cdylib {
-                return Ok(CrateData {
-                    exe_path: prepare_path(&path),
-                    data: collect_self_data(&path)?,
-                    std_crates,
-                    dep_crates,
-                    deps_symbols,
-                });
-            }
-        }
-    }
-
-    if !comp.binaries.is_empty() {
-        return Ok(CrateData {
-            exe_path: prepare_path(&comp.binaries[0]),
-            data: collect_self_data(&comp.binaries[0])?,
+    if let Some(ref artifact) = artifacts.iter().rev().find(|a| a.kind != ArtifactKind::Library) {
+        Ok(CrateData {
+            exe_path: prepare_path(&artifact.path),
+            data: collect_self_data(&artifact.path)?,
             std_crates,
             dep_crates,
             deps_symbols,
-        });
+        })
+    } else {
+        Err(Error::UnsupportedCrateType)
+    }
+}
+
+fn get_cargo_args(args: &Args) -> Vec<String> {
+    let mut list = Vec::new();
+    list.push("build".to_string());
+    list.push("--message-format=json".to_string());
+
+    if args.release {
+        list.push("--release".to_string());
     }
 
-    bail!("Only 'bin' and 'cdylib' targets are supported.")
+    if let Some(ref bin) = args.bin {
+        list.push(format!("--bin={}", bin));
+    } else if let Some(ref example) = args.example {
+        list.push(format!("--example={}", example));
+    }
+
+    if let Some(ref features) = args.features {
+        list.push(format!("--features={}", features));
+    } else if args.all_features {
+        list.push("--all-features".to_string());
+    } else if args.no_default_features {
+        list.push("--no-default-features".to_string());
+    }
+
+    if let Some(ref target) = args.target {
+        list.push(format!("--target={}", target));
+    }
+
+    if let Some(ref target_dir) = args.target_dir {
+        list.push(format!("--target-dir={}", target_dir));
+    }
+
+    if args.frozen {
+        list.push("--frozen".to_string());
+    }
+
+    if args.locked {
+        list.push("--locked".to_string());
+    }
+
+    list
 }
 
 fn collect_rlib_paths(deps_dir: &path::Path) -> Vec<(String, path::PathBuf)> {
@@ -379,23 +447,25 @@ fn collect_rlib_paths(deps_dir: &path::Path) -> Vec<(String, path::PathBuf)> {
     rlib_paths
 }
 
-fn collect_deps_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<MultiMap<String, String>> {
+fn map_file(path: &path::Path) -> Result<memmap::Mmap, Error> {
+    let file = fs::File::open(path).map_err(|_| Error::OpenFailed(path.to_owned()))?;
+    let file = unsafe { memmap::Mmap::map(&file).map_err(|_| Error::OpenFailed(path.to_owned()))? };
+    Ok(file)
+}
+
+fn collect_deps_symbols(
+    libs: Vec<(String, path::PathBuf)>
+) -> Result<MultiMap<String, String>, Error> {
     let mut map = MultiMap::new();
 
     for (name, path) in libs {
-        let file = fs::File::open(path)?;
-        let file = unsafe { memmap::Mmap::map(&file)? };
-        match goblin::archive::Archive::parse(&*file) {
-            Ok(archive) => {
-                for (_, _, symbols) in archive.summarize() {
-                    for sym in symbols {
-                        let sym = rustc_demangle::demangle(sym).to_string();
-                        map.insert(sym, name.clone());
-                    }
-                }
-            }
-            Err(e) => {
-                bail!(e.to_string())
+        let file = map_file(&path)?;
+        let archive = goblin::archive::Archive::parse(&*file)
+                          .map_err(|s| Error::Goblin(path.to_owned(), s.to_string()))?;
+        for (_, _, symbols) in archive.summarize() {
+            for sym in symbols {
+                let sym = rustc_demangle::demangle(sym).to_string();
+                map.insert(sym, name.clone());
             }
         }
     }
@@ -408,9 +478,9 @@ fn collect_deps_symbols(libs: Vec<(String, path::PathBuf)>) -> CargoResult<Multi
 }
 
 fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
-    let file = fs::File::open(path)?;
-    let file = unsafe { memmap::Mmap::map(&file)? };
-    let file = object::File::parse(&*file)?;
+    let file = map_file(&path)?;
+    let file = object::File::parse(&*file)
+                   .map_err(|s| Error::Object(path.to_owned(), s.to_owned()))?;
 
     let mut total_size = 0;
     let mut list = Vec::new();
@@ -437,7 +507,7 @@ fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
 
     let d = Data {
         symbols: list,
-        file_size: fs::metadata(path)?.len(),
+        file_size: fs::metadata(path).unwrap().len(),
         text_size: total_size,
     };
 

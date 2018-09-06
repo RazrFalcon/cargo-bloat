@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Changed
+- From now not all libraries from `%crate%/target/%mode%/deps/` will be processed,
+  but only one that was used during the building.
+- Better error processing.
+
+### Removed
+- `cargo` dependency.
 
 ## [0.5.2] - 2018-07-31
 ### Changed
