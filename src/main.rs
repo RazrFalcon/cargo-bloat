@@ -405,17 +405,20 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
         path.strip_prefix(workspace_root).unwrap_or(path).to_str().unwrap().to_string()
     };
 
-    if let Some(ref artifact) = artifacts.iter().rev().find(|a| a.kind != ArtifactKind::Library) {
-        Ok(CrateData {
-            exe_path: prepare_path(&artifact.path),
-            data: collect_self_data(&artifact.path)?,
-            std_crates,
-            dep_crates,
-            deps_symbols,
-        })
-    } else {
-        Err(Error::UnsupportedCrateType)
+    // The last artifact should be our binary/cdylib.
+    if let Some(ref artifact) = artifacts.last() {
+        if artifact.kind != ArtifactKind::Library {
+            return Ok(CrateData {
+                exe_path: prepare_path(&artifact.path),
+                data: collect_self_data(&artifact.path)?,
+                std_crates,
+                dep_crates,
+                deps_symbols,
+            });
+        }
     }
+
+    Err(Error::UnsupportedCrateType)
 }
 
 fn get_cargo_args(args: &Args) -> Vec<String> {
