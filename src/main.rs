@@ -133,7 +133,7 @@ struct CrateData {
 #[derive(Deserialize)]
 struct Target {
     name: String,
-    kind: Vec<String>,
+    crate_types: Vec<String>,
     #[serde(skip)]
     __do_not_match_exhaustively: (),
 }
@@ -168,6 +168,7 @@ enum Error {
     UnsupportedCrateType,
     OpenFailed(path::PathBuf),
     InvalidCargoOutput,
+    NoArtifacts,
     Object(path::PathBuf, String),
     Goblin(path::PathBuf, String),
 }
@@ -191,7 +192,10 @@ impl fmt::Display for Error {
                 write!(f, "failed to open a file '{:?}'", path)
             }
             Error::InvalidCargoOutput => {
-                write!(f, "failed to parse cargo's output")
+                write!(f, "failed to parse 'cargo' output")
+            }
+            Error::NoArtifacts => {
+                write!(f, "'cargo' does not produce any build artifacts")
             }
             Error::Object(ref path, ref msg) => {
                 write!(f, "'object' failed to parse '{:?}' cause '{}'", path, msg)
@@ -260,7 +264,7 @@ fn stdlibs_dir(target_triple: &str) -> Result<path::PathBuf, Error> {
 
     let stdout = str::from_utf8(&output.stdout).unwrap();
 
-    // From the `cargo` itself (this a one long link):
+    // From the `cargo` itself (this is a one long link):
     // https://github.com/rust-lang/cargo/blob/065e3ef98d3edbce5c9e66d927d9ac9944cc6639
     // /src/cargo/core/compiler/build_context/target_info.rs#L130..L133
     let mut rustlib = path::PathBuf::from(stdout.trim());
@@ -307,12 +311,12 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
         if let Some(target) = meta.target {
             if let Some(ref filenames) = meta.filenames {
                 for path in filenames {
-                    for kind_str in &target.kind {
-                        let kind = match kind_str.as_str() {
+                    for crate_type in &target.crate_types {
+                        let kind = match crate_type.as_str() {
                             "bin" => ArtifactKind::Binary,
                             "lib" => ArtifactKind::Library,
                             "cdylib" => ArtifactKind::CDynLib,
-                            _ => continue,
+                            _ => continue, // Simply ignore.
                         };
 
                         artifacts.push({
@@ -326,6 +330,10 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
                 }
             }
         }
+    }
+
+    if artifacts.is_empty() {
+        return Err(Error::NoArtifacts);
     }
 
     let default_target = get_default_target()?;
