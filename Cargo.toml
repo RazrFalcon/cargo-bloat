@@ -8,10 +8,10 @@ readme = "README.md"
 license = "MIT"
 
 [dependencies]
-goblin = "0.0.15" # the same version as in `object`
+goblin = "0.0.17" # the same version as in `object`
 memmap = "0.6"
 multimap = "0.4"
-object = { version = "0.9", default-features = false, features = ["std", "compression"] }
+object = { version = "0.10", default-features = false, features = ["std", "compression"] }
 regex = "1"
 rustc-demangle = "0.1.6"
 serde = "1"
