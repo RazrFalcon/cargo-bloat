@@ -130,7 +130,7 @@ struct CrateData {
     deps_symbols: MultiMap<String, String>, // symbol, crate
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct Target {
     name: String,
     crate_types: Vec<String>,
@@ -138,10 +138,17 @@ struct Target {
     __do_not_match_exhaustively: (),
 }
 
-#[derive(Deserialize)]
-struct Metadata {
+#[derive(Deserialize, Debug)]
+struct BuildOutput {
     target: Option<Target>,
     filenames: Option<Vec<String>>,
+    #[serde(skip)]
+    __do_not_match_exhaustively: (),
+}
+
+#[derive(Deserialize, Debug)]
+struct Metadata {
+    workspace_root: String,
     #[serde(skip)]
     __do_not_match_exhaustively: (),
 }
@@ -164,7 +171,8 @@ struct Artifact {
 enum Error {
     StdDirNotFound(path::PathBuf),
     RustcFailed,
-    CargoFailed,
+    CargoMetadataFailed,
+    CargoBuildFailed,
     UnsupportedCrateType,
     OpenFailed(path::PathBuf),
     InvalidCargoOutput,
@@ -182,7 +190,10 @@ impl fmt::Display for Error {
             Error::RustcFailed => {
                 write!(f, "failed to execute 'rustc'. It should be in the PATH")
             }
-            Error::CargoFailed => {
+            Error::CargoMetadataFailed => {
+                write!(f, "failed to execute 'cargo'. It should be in the PATH")
+            }
+            Error::CargoBuildFailed => {
                 write!(f, "failed to execute 'cargo'. Probably a build error")
             }
             Error::UnsupportedCrateType => {
@@ -225,7 +236,7 @@ fn main() {
         }
     };
 
-    println!("Analyzing {} ...", crate_data.exe_path);
+    println!("Analyzing {}", crate_data.exe_path);
 
     let mut table = if args.crates {
         Table::new(&["File", ".text", "Size", "Name"])
@@ -293,23 +304,42 @@ fn get_default_target() -> Result<String, Error> {
     Err(Error::RustcFailed)
 }
 
+fn get_workspace_root() -> Result<String, Error> {
+    let output = Command::new("cargo").args(&["metadata"])
+        .output().map_err(|_| Error::CargoMetadataFailed)?;
+
+    if !output.status.success() {
+        return Err(Error::CargoMetadataFailed);
+    }
+
+    let stdout = str::from_utf8(&output.stdout).unwrap();
+    for line in stdout.lines() {
+        let meta: Metadata = serde_json::from_str(line).map_err(|_| Error::InvalidCargoOutput)?;
+        return Ok(meta.workspace_root);
+    }
+
+    Err(Error::InvalidCargoOutput)
+}
+
 fn process_crate(args: &Args) -> Result<CrateData, Error> {
+    let workspace_root = get_workspace_root()?;
+
     let output = Command::new("cargo")
         .args(&get_cargo_args(args))
         .output()
         .map_err(|_| Error::RustcFailed)?;
 
     if !output.status.success() {
-        return Err(Error::CargoFailed);
+        return Err(Error::CargoBuildFailed);
     }
 
     let mut artifacts = Vec::new();
     let stdout = str::from_utf8(&output.stdout).unwrap();
     for line in stdout.lines() {
-        let meta: Metadata = serde_json::from_str(line).map_err(|_| Error::InvalidCargoOutput)?;
+        let build: BuildOutput = serde_json::from_str(line).map_err(|_| Error::InvalidCargoOutput)?;
 
-        if let Some(target) = meta.target {
-            if let Some(ref filenames) = meta.filenames {
+        if let Some(target) = build.target {
+            if let Some(ref filenames) = build.filenames {
                 for path in filenames {
                     for crate_type in &target.crate_types {
                         let kind = match crate_type.as_str() {
@@ -372,7 +402,7 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     let deps_symbols = collect_deps_symbols(rlib_paths)?;
 
     let prepare_path = |path: &path::Path| {
-        path.to_str().unwrap().to_string()
+        path.strip_prefix(workspace_root).unwrap_or(path).to_str().unwrap().to_string()
     };
 
     if let Some(ref artifact) = artifacts.iter().rev().find(|a| a.kind != ArtifactKind::Library) {
