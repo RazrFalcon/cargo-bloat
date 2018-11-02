@@ -343,23 +343,21 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
 
         if let Some(target) = build.target {
             if let Some(ref filenames) = build.filenames {
-                for path in filenames {
-                    for crate_type in &target.crate_types {
-                        let kind = match crate_type.as_str() {
-                            "bin" => ArtifactKind::Binary,
-                            "lib" => ArtifactKind::Library,
-                            "cdylib" => ArtifactKind::CDynLib,
-                            _ => continue, // Simply ignore.
-                        };
+                for (path, crate_type) in filenames.iter().zip(target.crate_types) {
+                    let kind = match crate_type.as_str() {
+                        "bin" => ArtifactKind::Binary,
+                        "lib" => ArtifactKind::Library,
+                        "cdylib" => ArtifactKind::CDynLib,
+                        _ => continue, // Simply ignore.
+                    };
 
-                        artifacts.push({
-                            Artifact {
-                                kind,
-                                name: target.name.replace("-", "_"),
-                                path: path::PathBuf::from(&path),
-                            }
-                        });
-                    }
+                    artifacts.push({
+                        Artifact {
+                            kind,
+                            name: target.name.replace("-", "_"),
+                            path: path::PathBuf::from(&path),
+                        }
+                    });
                 }
             }
         }
