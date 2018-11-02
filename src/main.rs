@@ -185,7 +185,8 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::StdDirNotFound(ref path) => {
-                write!(f, "failed to find a dir with std libraries. Expected location: {:?}", path)
+                write!(f, "failed to find a dir with std libraries. Expected location: {}",
+                       path.to_str().unwrap())
             }
             Error::RustcFailed => {
                 write!(f, "failed to execute 'rustc'. It should be in the PATH")
@@ -200,7 +201,7 @@ impl fmt::Display for Error {
                 write!(f, "only 'bin' and 'cdylib' crate types are supported")
             }
             Error::OpenFailed(ref path) => {
-                write!(f, "failed to open a file '{:?}'", path)
+                write!(f, "failed to open a file '{}'", path.to_str().unwrap())
             }
             Error::InvalidCargoOutput => {
                 write!(f, "failed to parse 'cargo' output")
@@ -209,10 +210,12 @@ impl fmt::Display for Error {
                 write!(f, "'cargo' does not produce any build artifacts")
             }
             Error::Object(ref path, ref msg) => {
-                write!(f, "'object' failed to parse '{:?}' cause '{}'", path, msg)
+                write!(f, "'object' failed to parse '{}' cause '{}'",
+                       path.to_str().unwrap(), msg)
             }
             Error::Goblin(ref path, ref msg) => {
-                write!(f, "'goblin' failed to parse '{:?}' cause '{}'", path, msg)
+                write!(f, "'goblin' failed to parse '{}' cause '{}'",
+                       path.to_str().unwrap(), msg)
             }
         }
     }
