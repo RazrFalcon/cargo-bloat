@@ -171,6 +171,7 @@ struct Artifact {
 enum Error {
     StdDirNotFound(path::PathBuf),
     RustcFailed,
+    CargoError(String),
     CargoMetadataFailed,
     CargoBuildFailed,
     UnsupportedCrateType,
@@ -191,11 +192,14 @@ impl fmt::Display for Error {
             Error::RustcFailed => {
                 write!(f, "failed to execute 'rustc'. It should be in the PATH")
             }
+            Error::CargoError(ref msg) => {
+                write!(f, "{}", msg)
+            }
             Error::CargoMetadataFailed => {
                 write!(f, "failed to execute 'cargo'. It should be in the PATH")
             }
             Error::CargoBuildFailed => {
-                write!(f, "failed to execute 'cargo'. Probably a build error")
+                write!(f, "failed to execute 'cargo build'. Probably a build error")
             }
             Error::UnsupportedCrateType => {
                 write!(f, "only 'bin' and 'cdylib' crate types are supported")
@@ -228,8 +232,6 @@ fn main() {
     }
 
     let Opts::Bloat(args) = Opts::from_args();
-
-    println!("Compiling ...");
 
     let crate_data = match process_crate(&args) {
         Ok(v) => v,
@@ -312,7 +314,12 @@ fn get_workspace_root() -> Result<String, Error> {
         .output().map_err(|_| Error::CargoMetadataFailed)?;
 
     if !output.status.success() {
-        return Err(Error::CargoMetadataFailed);
+        let mut msg = str::from_utf8(&output.stderr).unwrap().trim();
+        if msg.starts_with("error: ") {
+            msg = &msg[7..];
+        }
+
+        return Err(Error::CargoError(msg.to_string()));
     }
 
     let stdout = str::from_utf8(&output.stdout).unwrap();
@@ -327,10 +334,12 @@ fn get_workspace_root() -> Result<String, Error> {
 fn process_crate(args: &Args) -> Result<CrateData, Error> {
     let workspace_root = get_workspace_root()?;
 
+    println!("Compiling ...");
+
     let output = Command::new("cargo")
         .args(&get_cargo_args(args))
         .output()
-        .map_err(|_| Error::RustcFailed)?;
+        .map_err(|_| Error::CargoBuildFailed)?;
 
     if !output.status.success() {
         return Err(Error::CargoBuildFailed);
