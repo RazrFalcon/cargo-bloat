@@ -536,12 +536,7 @@ fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
     let mut total_size = 0;
     let mut list = Vec::new();
     for symbol in file.symbol_map().symbols() {
-        match symbol.kind() {
-            object::SymbolKind::Section | object::SymbolKind::File => continue,
-            _ => {}
-        }
-
-        if symbol.section_kind() != Some(object::SectionKind::Text) {
+        if symbol.is_undefined() || symbol.kind() != object::SymbolKind::Text {
             continue;
         }
 
