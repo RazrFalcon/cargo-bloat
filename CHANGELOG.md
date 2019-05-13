@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+## [0.6.4] - 2019-05-13
+### Fixed
+- Cargo.lock
 
 ## [0.6.3] - 2019-05-06
 ### Changed
@@ -93,7 +96,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - When running on an unsupported OS you will get an error and not a random panic.
 - The table has a dynamic column width now.
 
-[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.6.4...HEAD
+[0.6.4]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.6.0...v0.6.1
