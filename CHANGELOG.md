@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - `--time` flag.
 
+### Changed
+- The `-n` flags affects only the functions table now.
+
 ## [0.6.4] - 2019-05-13
 ### Fixed
 - Cargo.lock

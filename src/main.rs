@@ -893,7 +893,7 @@ fn parse_crate_from_sym(sym: &str) -> String {
     crate_name
 }
 
-fn crate_from_sym(d: &CrateData, flags: &Args, sym: &str) -> (String, bool) {
+fn crate_from_sym(d: &CrateData, args: &Args, sym: &str) -> (String, bool) {
     const UNKNOWN: &str = "[Unknown]";
 
     let mut is_exact = true;
@@ -985,7 +985,7 @@ fn crate_from_sym(d: &CrateData, flags: &Args, sym: &str) -> (String, bool) {
         }
 
 
-    if !flags.split_std {
+    if !args.split_std {
         if d.std_crates.contains(&crate_name) {
             crate_name = "std".to_string();
         }
@@ -994,12 +994,12 @@ fn crate_from_sym(d: &CrateData, flags: &Args, sym: &str) -> (String, bool) {
     (crate_name, is_exact)
 }
 
-fn print_crates(d: CrateData, flags: &Args, table: &mut Table) {
+fn print_crates(d: CrateData, args: &Args, table: &mut Table) {
     let dd = &d.data;
     let mut sizes = HashMap::new();
 
     for sym in dd.symbols.iter() {
-        let (mut crate_name, _) = crate_from_sym(&d, flags, &sym.name);
+        let (mut crate_name, _) = crate_from_sym(&d, args, &sym.name);
 
         if let Some(v) = sizes.get(&crate_name).cloned() {
             sizes.insert(crate_name.to_string(), v + sym.size);
@@ -1028,12 +1028,11 @@ fn print_crates(d: CrateData, flags: &Args, table: &mut Table) {
         }
     }
 
-    let n = if flags.n == 0 { list.len() } else { flags.n };
-    for &(k, v) in list.iter().rev().take(n) {
+    for &(k, v) in list.iter().rev() {
         let percent_file = *v as f64 / dd.file_size as f64 * 100.0;
         let percent_text = *v as f64 / dd.text_size as f64 * 100.0;
 
-        let time = if flags.time {
+        let time = if args.time {
             Some(match d.times.iter().find(|e| e.crate_name == *k) {
                 Some(elapsed) => format_time(elapsed.time),
                 None => "-".to_string(),
@@ -1046,7 +1045,7 @@ fn print_crates(d: CrateData, flags: &Args, table: &mut Table) {
     }
 
     {
-        let time = if flags.time {
+        let time = if args.time {
             Some(String::new())
         } else {
             None
