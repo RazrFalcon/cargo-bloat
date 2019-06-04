@@ -12,7 +12,7 @@ edition = "2018"
 [dependencies]
 goblin = "0.0.22" # the same version as in `object`
 memmap = "0.7"
-multimap = "0.4"
+multimap = "0.5"
 object = { version = "0.12", default-features = false, features = ["std", "compression"] }
 regex = "1"
 rustc-demangle = "0.1.6"
