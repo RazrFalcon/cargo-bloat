@@ -7,6 +7,7 @@ categories = ["development-tools::cargo-plugins"]
 repository = "https://github.com/RazrFalcon/cargo-bloat"
 readme = "README.md"
 license = "MIT"
+edition = "2018"
 
 [dependencies]
 goblin = "0.0.22" # the same version as in `object`

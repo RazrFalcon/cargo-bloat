@@ -1,17 +1,3 @@
-extern crate goblin;
-extern crate memmap;
-extern crate multimap;
-extern crate object;
-extern crate regex;
-extern crate rustc_demangle;
-extern crate serde;
-extern crate serde_json;
-extern crate term_size;
-extern crate time;
-#[macro_use] extern crate serde_derive;
-#[macro_use] extern crate structopt;
-
-
 use std::{fs, fmt, path, str};
 use std::collections::HashMap;
 use std::process::{self, Command};
@@ -21,12 +7,14 @@ use object::Object;
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
 
+use serde_derive::{Serialize, Deserialize};
+
 use regex::Regex;
 
 use multimap::MultiMap;
 
 mod table;
-use table::Table;
+use crate::table::Table;
 
 
 #[derive(StructOpt)]
@@ -916,7 +904,7 @@ fn crate_from_sym(d: &CrateData, args: &Args, sym: &str) -> (String, bool) {
             // Just a simple function like:
             // getopts::Options::parse
 
-            if let Some(mut names) = d.deps_symbols.get_vec(sym) {
+            if let Some(names) = d.deps_symbols.get_vec(sym) {
                 if names.len() == 1 {
                     // In case the symbol was instanced in a different crate.
                     names[0].clone()
@@ -999,7 +987,7 @@ fn print_crates(d: CrateData, args: &Args, table: &mut Table) {
     let mut sizes = HashMap::new();
 
     for sym in dd.symbols.iter() {
-        let (mut crate_name, _) = crate_from_sym(&d, args, &sym.name);
+        let (crate_name, _) = crate_from_sym(&d, args, &sym.name);
 
         if let Some(v) = sizes.get(&crate_name).cloned() {
             sizes.insert(crate_name.to_string(), v + sym.size);
