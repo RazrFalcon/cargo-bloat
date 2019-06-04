@@ -82,6 +82,7 @@ File .text   Size     Crate Name
 Flags specific for the `cargo-bloat`:
 ```
         --crates                   Per crate bloatedness
+        --time                     Per crate build time. Will run `cargo clean` first
         --filter <CRATE|REGEXP>    Filter functions by crate
         --split-std                Split the 'std' crate to original crates like core, alloc, etc.
         --full-fn                  Print full function name with hash values

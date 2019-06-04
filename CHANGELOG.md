@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- `--time` flag.
+
 ## [0.6.4] - 2019-05-13
 ### Fixed
 - Cargo.lock
@@ -76,7 +79,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [0.2.2] - 2018-02-18
 ### Added
-- A warning to the `--creates` output.
+- A warning to the `--crates` output.
 
 ### Changed
 - `rustc-demangle` updated.

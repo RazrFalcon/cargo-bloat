@@ -4,9 +4,10 @@ extern crate multimap;
 extern crate object;
 extern crate regex;
 extern crate rustc_demangle;
-extern crate term_size;
-extern crate serde_json;
 extern crate serde;
+extern crate serde_json;
+extern crate term_size;
+extern crate time;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate structopt;
 
@@ -58,6 +59,10 @@ struct Args {
     /// Build artifacts in release mode, with optimizations
     release: bool,
 
+    #[structopt(short = "j", long = "jobs", value_name = "N")]
+    /// Number of parallel jobs, defaults to # of CPUs
+    jobs: Option<u32>,
+
     #[structopt(long = "features", value_name = "FEATURES")]
     /// Space-separated list of features to activate
     features: Option<String>,
@@ -89,6 +94,10 @@ struct Args {
     #[structopt(long = "crates")]
     /// Per crate bloatedness
     crates: bool,
+
+    #[structopt(long = "time")]
+    /// Per crate build time. Will run `cargo clean` first
+    time: bool,
 
     #[structopt(long = "filter", value_name = "CRATE|REGEXP")]
     /// Filter functions by crate
@@ -123,11 +132,12 @@ struct Data {
 }
 
 struct CrateData {
-    exe_path: String,
+    exe_path: Option<String>,
     data: Data,
     std_crates: Vec<String>,
     dep_crates: Vec<String>,
     deps_symbols: MultiMap<String, String>, // symbol, crate
+    times: Vec<Elapsed>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -165,6 +175,13 @@ struct Artifact {
     kind: ArtifactKind,
     name: String, // TODO: Rc?
     path: path::PathBuf,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct Elapsed {
+    crate_name: String,
+    time: u64,
+    build_script: bool,
 }
 
 #[derive(Debug)]
@@ -225,10 +242,26 @@ impl fmt::Display for Error {
     }
 }
 
+impl std::error::Error for Error {}
+
+
 fn main() {
     if cfg!(not(unix)) {
         eprintln!("This OS is not supported.");
         process::exit(1);
+    }
+
+    if let Ok(wrap) = std::env::var("RUSTC_WRAPPER") {
+        if wrap.contains("cargo-bloat") {
+            let args: Vec<_> = std::env::args().map(|a| a.to_string()).collect();
+            match wrapper_mode(&args) {
+                Ok(_) => return,
+                Err(e) => {
+                    eprintln!("Error: {}.", e);
+                    process::exit(1);
+                }
+            }
+        }
     }
 
     let Opts::Bloat(args) = Opts::from_args();
@@ -241,10 +274,18 @@ fn main() {
         }
     };
 
-    println!("Analyzing {}", crate_data.exe_path);
+    if let Some(ref path) = crate_data.exe_path {
+        println!("Analyzing {}", path);
+    }
 
     let mut table = if args.crates {
-        Table::new(&["File", ".text", "Size", "Name"])
+        if args.time {
+            Table::new(&["File", ".text", "Size", "Time", "Crate"])
+        } else {
+            Table::new(&["File", ".text", "Size", "Crate"])
+        }
+    } else if args.time {
+        Table::new(&["Time", "Crate"])
     } else {
         Table::new(&["File", ".text", "Size", "Crate", "Name"])
     };
@@ -259,6 +300,8 @@ fn main() {
 
     if args.crates {
         print_crates(crate_data, &args, &mut table);
+    } else if args.time {
+        print_times(crate_data, &mut table);
     } else {
         print_methods(crate_data, &args, &mut table);
     }
@@ -271,6 +314,76 @@ fn main() {
         println!("Note: numbers above are a result of guesswork. \
                   They are not 100% correct and never will be.");
     }
+
+    if args.time && args.jobs != Some(1) {
+        println!("Note: prefer using -j1 argument to disable a multithreaded build.");
+    }
+}
+
+fn wrapper_mode(args: &[String]) -> Result<(), Box<std::error::Error>> {
+    let start = time::precise_time_ns();
+
+    Command::new(&args[1])
+        .args(&args[2..])
+        .status()
+        .map_err(|_| Error::CargoBuildFailed)?;
+
+    let end = time::precise_time_ns();
+
+    let mut crate_name = String::new();
+    for (i, arg) in args.iter().enumerate() {
+        if arg == "--crate-name" {
+            crate_name = args[i + 1].clone();
+            break;
+        }
+    }
+
+    let mut build_script = false;
+
+    if crate_name == "build_script_build" {
+        build_script = true;
+
+        let mut out_dir = String::new();
+        let mut extra_filename = String::new();
+
+        for (i, arg) in args.iter().enumerate() {
+            if arg == "--out-dir" {
+                out_dir = args[i + 1].clone();
+            }
+
+            if arg.starts_with("extra-filename") {
+                extra_filename = arg[15..].to_string();
+            }
+        }
+
+        if !out_dir.is_empty() {
+            let path = std::path::Path::new(&out_dir);
+            if let Some(name) = path.file_name() {
+                let name = name.to_str().unwrap().to_string();
+                let name = name.replace(&extra_filename, "");
+                let name = name.replace("-", "_");
+                crate_name = name;
+            }
+        }
+    }
+
+    // Still not resolved?
+    if crate_name == "build_script_build" {
+        crate_name = "?".to_string();
+    }
+
+    // TODO: the same crates but with different versions?
+
+    let elapsed = Elapsed {
+        crate_name,
+        time: end - start,
+        build_script,
+    };
+
+    // `cargo` will ignore raw JSON, so we have to use a prefix
+    eprintln!("json-time {}", serde_json::to_string(&elapsed).unwrap());
+
+    Ok(())
 }
 
 fn stdlibs_dir(target_triple: &str) -> Result<path::PathBuf, Error> {
@@ -336,10 +449,25 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
 
     println!("Compiling ...");
 
-    let output = Command::new("cargo")
-        .args(&get_cargo_args(args))
-        .output()
-        .map_err(|_| Error::CargoBuildFailed)?;
+    let output = if args.time {
+        // To collect the build times we have to clean the repo first.
+
+        // No need to check the output status.
+        let _ = Command::new("cargo")
+            .arg("clean")
+            .output();
+
+        Command::new("cargo")
+            .args(&get_cargo_args(args))
+            .env("RUSTC_WRAPPER", "cargo-bloat")
+            .output()
+            .map_err(|_| Error::CargoBuildFailed)?
+    } else {
+        Command::new("cargo")
+            .args(&get_cargo_args(args))
+            .output()
+            .map_err(|_| Error::CargoBuildFailed)?
+    };
 
     if !output.status.success() {
         return Err(Error::CargoBuildFailed);
@@ -372,8 +500,49 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
         }
     }
 
+    let mut times = Vec::new();
+    if args.time {
+        let stderr = str::from_utf8(&output.stderr).unwrap();
+        for line in stderr.lines() {
+            if !line.starts_with("json-time {") {
+                continue;
+            }
+
+            // Try to parse wrapper output first.
+            if let Ok(elapsed) = serde_json::from_str::<Elapsed>(&line[10..]) {
+                times.push(elapsed);
+            }
+        }
+    }
+
+    // Merge build script times into crate build times.
+    while let Some(idx) = times.iter().position(|t| t.build_script) {
+        let script_name = times[idx].crate_name.clone();
+        let script_time = times[idx].time;
+
+        for time in &mut times {
+            if time.crate_name == script_name && !time.build_script {
+                time.time += script_time;
+            }
+        }
+
+        times.remove(idx);
+    }
+
     if artifacts.is_empty() {
         return Err(Error::NoArtifacts);
+    }
+
+    if args.time && !args.crates {
+        // We don't care about symbols if we only plan to print the build times.
+        return Ok(CrateData {
+            exe_path: None,
+            data: Data { symbols: Vec::new(), file_size: 0, text_size: 0 },
+            std_crates: Vec::new(),
+            dep_crates: Vec::new(),
+            deps_symbols: MultiMap::new(),
+            times,
+        });
     }
 
     let default_target = get_default_target()?;
@@ -419,11 +588,12 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     if let Some(ref artifact) = artifacts.last() {
         if artifact.kind != ArtifactKind::Library {
             return Ok(CrateData {
-                exe_path: prepare_path(&artifact.path),
+                exe_path: Some(prepare_path(&artifact.path)),
                 data: collect_self_data(&artifact.path)?,
                 std_crates,
                 dep_crates,
                 deps_symbols,
+                times,
             });
         }
     }
@@ -468,6 +638,10 @@ fn get_cargo_args(args: &Args) -> Vec<String> {
 
     if args.locked {
         list.push("--locked".to_string());
+    }
+
+    if let Some(jobs) = args.jobs {
+        list.push(format!("-j{}", jobs));
     }
 
     list
@@ -562,7 +736,8 @@ fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
 
 fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
     fn push_row(table: &mut Table, percent_file: f64, percent_text: f64, size: u64,
-                crate_name: String, name: String) {
+                crate_name: String, name: String)
+    {
         let percent_file_s = format_percent(percent_file);
         let percent_text_s = format_percent(percent_text);
         let size_s = format_size(size);
@@ -836,12 +1011,21 @@ fn print_crates(d: CrateData, flags: &Args, table: &mut Table) {
     let mut list: Vec<(&String, &u64)> = sizes.iter().collect();
     list.sort_by_key(|v| v.1);
 
-    fn push_row(table: &mut Table, percent_file: f64, percent_text: f64, size: u64, name: String) {
+    fn push_row(table: &mut Table, percent_file: f64, percent_text: f64, size: u64,
+                time: Option<String>, name: String)
+    {
         let percent_file_s = format_percent(percent_file);
         let percent_text_s = format_percent(percent_text);
         let size_s = format_size(size);
 
-        table.push(&[percent_file_s, percent_text_s, size_s, name]);
+        match time {
+            Some(time) => {
+                table.push(&[percent_file_s, percent_text_s, size_s, time, name]);
+            }
+            None => {
+                table.push(&[percent_file_s, percent_text_s, size_s, name]);
+            }
+        }
     }
 
     let n = if flags.n == 0 { list.len() } else { flags.n };
@@ -849,13 +1033,37 @@ fn print_crates(d: CrateData, flags: &Args, table: &mut Table) {
         let percent_file = *v as f64 / dd.file_size as f64 * 100.0;
         let percent_text = *v as f64 / dd.text_size as f64 * 100.0;
 
-        push_row(table, percent_file, percent_text, *v, k.clone());
+        let time = if flags.time {
+            Some(match d.times.iter().find(|e| e.crate_name == *k) {
+                Some(elapsed) => format_time(elapsed.time),
+                None => "-".to_string(),
+            })
+        } else {
+            None
+        };
+
+        push_row(table, percent_file, percent_text, *v, time, k.clone());
     }
 
     {
+        let time = if flags.time {
+            Some(String::new())
+        } else {
+            None
+        };
+
         let percent_file = dd.text_size as f64 / dd.file_size as f64 * 100.0;
         let name = format!(".text section size, the file size is {}", format_size(dd.file_size));
-        push_row(table, percent_file, 100.0, dd.text_size, name);
+        push_row(table, percent_file, 100.0, dd.text_size, time, name);
+    }
+}
+
+fn print_times(d: CrateData, table: &mut Table) {
+    let mut times = d.times.clone();
+    times.sort_by(|a, b| b.time.cmp(&a.time));
+
+    for time in times {
+        table.push(&[format_time(time.time), time.crate_name]);
     }
 }
 
@@ -874,4 +1082,8 @@ fn format_size(bytes: u64) -> String {
     } else {
         format!("{}B", bytes)
     }
+}
+
+fn format_time(ns: u64) -> String {
+    format!("{:.2}s", ns as f64 / 1_000_000_000.0)
 }
