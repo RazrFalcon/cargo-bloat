@@ -308,7 +308,7 @@ fn main() {
     }
 }
 
-fn wrapper_mode(args: &[String]) -> Result<(), Box<std::error::Error>> {
+fn wrapper_mode(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let start = time::precise_time_ns();
 
     Command::new(&args[1])
