@@ -440,9 +440,18 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     let output = if args.time {
         // To collect the build times we have to clean the repo first.
 
+        let clean_args = if args.release {
+            // Remove only `target/release` in the release mode.
+            vec!["clean", "--release"]
+        } else {
+            // We can't remove only `target/debug` in debug mode yet.
+            // See https://github.com/rust-lang/cargo/pull/6989
+            vec!["clean"]
+        };
+
         // No need to check the output status.
         let _ = Command::new("cargo")
-            .arg("clean")
+            .args(&clean_args)
             .output();
 
         Command::new("cargo")
