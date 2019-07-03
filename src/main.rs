@@ -613,12 +613,17 @@ fn get_cargo_args(args: &Args) -> Vec<String> {
         list.push(format!("--example={}", example));
     }
 
-    if let Some(ref features) = args.features {
-        list.push(format!("--features={}", features));
-    } else if args.all_features {
+    if args.all_features {
         list.push("--all-features".to_string());
-    } else if args.no_default_features {
-        list.push("--no-default-features".to_string());
+    } else {
+
+        if args.no_default_features {
+            list.push("--no-default-features".to_string());
+        }
+
+        if let Some(ref features) = args.features {
+            list.push(format!("--features={}", features));
+        }
     }
 
     if let Some(ref target) = args.target {
