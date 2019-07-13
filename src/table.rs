@@ -26,15 +26,6 @@ impl Table {
         self.data.extend_from_slice(row);
     }
 
-    pub fn insert(&mut self, row: usize, row_data: &[&str]) {
-        assert_eq!(row_data.len(), self.columns_count);
-
-        let row = (row + 1) * self.columns_count;
-        for (idx, cell) in row_data.iter().enumerate() {
-            self.data.insert(row + idx, cell.to_string());
-        }
-    }
-
     pub fn rows_count(&self) -> usize {
         debug_assert!(!self.data.is_empty());
 
