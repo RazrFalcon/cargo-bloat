@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- `--test` support.
+
+### Changed
+- The `[N Others]` row moved to the bottom and contains a more detailed text now.
+- Allow to combine `--no-default-features` with a custom feature set.
 
 ## [0.7.1] - 2019-06-20
 ### Changed

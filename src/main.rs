@@ -43,6 +43,10 @@ struct Args {
     /// Build only the specified example
     example: Option<String>,
 
+    #[structopt(long = "test", value_name = "NAME")]
+    /// Build only the specified test target
+    test: Option<String>,
+
     #[structopt(long = "release")]
     /// Build artifacts in release mode, with optimizations
     release: bool,
@@ -611,6 +615,8 @@ fn get_cargo_args(args: &Args) -> Vec<String> {
         list.push(format!("--bin={}", bin));
     } else if let Some(ref example) = args.example {
         list.push(format!("--example={}", example));
+    } else if let Some(ref test) = args.test {
+        list.push(format!("--test={}", test));
     }
 
     if args.all_features {
