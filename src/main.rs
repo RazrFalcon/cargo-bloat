@@ -2,8 +2,6 @@ use std::{fs, fmt, path, str};
 use std::collections::HashMap;
 use std::process::{self, Command};
 
-use object::Object;
-
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
 
@@ -13,7 +11,19 @@ use regex::Regex;
 
 use multimap::MultiMap;
 
+mod ar;
+
+#[cfg(all(unix, not(target_os = "macos")))]
+mod elf32;
+#[cfg(all(unix, not(target_os = "macos")))]
+mod elf64;
+
+#[cfg(target_os = "macos")]
+mod macho;
+
+mod parser;
 mod table;
+
 use crate::table::Table;
 
 
@@ -187,8 +197,10 @@ enum Error {
     OpenFailed(path::PathBuf),
     InvalidCargoOutput,
     NoArtifacts,
-    Object(path::PathBuf, String),
-    Goblin(path::PathBuf, String),
+    #[cfg(all(unix, not(target_os = "macos")))]
+    NotAnElf(path::PathBuf),
+    #[cfg(target_os = "macos")]
+    NotAMachO(path::PathBuf),
 }
 
 impl fmt::Display for Error {
@@ -196,7 +208,7 @@ impl fmt::Display for Error {
         match *self {
             Error::StdDirNotFound(ref path) => {
                 write!(f, "failed to find a dir with std libraries. Expected location: {}",
-                       path.to_str().unwrap())
+                       path.display())
             }
             Error::RustcFailed => {
                 write!(f, "failed to execute 'rustc'. It should be in the PATH")
@@ -214,7 +226,7 @@ impl fmt::Display for Error {
                 write!(f, "only 'bin' and 'cdylib' crate types are supported")
             }
             Error::OpenFailed(ref path) => {
-                write!(f, "failed to open a file '{}'", path.to_str().unwrap())
+                write!(f, "failed to open a file '{}'", path.display())
             }
             Error::InvalidCargoOutput => {
                 write!(f, "failed to parse 'cargo' output")
@@ -222,13 +234,13 @@ impl fmt::Display for Error {
             Error::NoArtifacts => {
                 write!(f, "'cargo' does not produce any build artifacts")
             }
-            Error::Object(ref path, ref msg) => {
-                write!(f, "'object' failed to parse '{}' cause '{}'",
-                       path.to_str().unwrap(), msg)
+            #[cfg(all(unix, not(target_os = "macos")))]
+            Error::NotAnElf(ref path) => {
+                write!(f, "'{}' is not an ELF file", path.display())
             }
-            Error::Goblin(ref path, ref msg) => {
-                write!(f, "'goblin' failed to parse '{}' cause '{}'",
-                       path.to_str().unwrap(), msg)
+            #[cfg(target_os = "macos")]
+            Error::NotAMachO(ref path) => {
+                write!(f, "'{}' is not an Mach-O file", path.display())
             }
         }
     }
@@ -693,13 +705,8 @@ fn collect_deps_symbols(
 
     for (name, path) in libs {
         let file = map_file(&path)?;
-        let archive = goblin::archive::Archive::parse(&*file)
-                          .map_err(|s| Error::Goblin(path.to_owned(), s.to_string()))?;
-        for (_, _, symbols) in archive.summarize() {
-            for sym in symbols {
-                let sym = rustc_demangle::demangle(sym).to_string();
-                map.insert(sym, name.clone());
-            }
+        for sym in ar::parse(&file) {
+            map.insert(sym, name.clone());
         }
     }
 
@@ -710,36 +717,62 @@ fn collect_deps_symbols(
     Ok(map)
 }
 
+#[cfg(all(unix, not(target_os = "macos")))]
 fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
     let file = map_file(&path)?;
-    let file = object::File::parse(&*file)
-                   .map_err(|s| Error::Object(path.to_owned(), s.to_owned()))?;
+    let data = &file;
 
-    let mut total_size = 0;
-    let mut list = Vec::new();
-    for symbol in file.symbol_map().symbols() {
-        match symbol.kind() {
-            object::SymbolKind::Section | object::SymbolKind::File => continue,
-            _ => {}
-        }
-
-        if symbol.section_kind() != Some(object::SectionKind::Text) {
-            continue;
-        }
-
-        total_size += symbol.size();
-
-        let fn_name = symbol.name().unwrap_or("<unknown>");
-        let fn_name = rustc_demangle::demangle(fn_name).to_string();
-
-        list.push(SymbolData {
-            name: fn_name,
-            size: symbol.size(),
-        });
+    if data.len() < 16 {
+        return Err(Error::NotAnElf(path.to_owned()));
     }
 
+    if &data[0..4] != b"\x7fELF" {
+        return Err(Error::NotAnElf(path.to_owned()));
+    }
+
+    let is_64_bit = match data[4] {
+        1 => false,
+        2 => true,
+        _ => return Err(Error::NotAnElf(path.to_owned())),
+    };
+
+    let byte_order = match data[5] {
+        1 => parser::ByteOrder::LittleEndian,
+        2 => parser::ByteOrder::BigEndian,
+        _ => return Err(Error::NotAnElf(path.to_owned())),
+    };
+
+    let symbols = if is_64_bit {
+        elf64::parse(data, byte_order)
+    } else {
+        elf32::parse(data, byte_order)
+    };
+
+    let total_size = symbols.iter().map(|s| s.size).sum();
+
     let d = Data {
-        symbols: list,
+        symbols,
+        file_size: fs::metadata(path).unwrap().len(),
+        text_size: total_size,
+    };
+
+    Ok(d)
+}
+
+#[cfg(target_os = "macos")]
+fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
+    let file = map_file(&path)?;
+    let data = &file;
+
+    if data.get(0..4) != Some(&[0xCF, 0xFA, 0xED, 0xFE]) {
+        return Err(Error::NotAMachO(path.to_owned()));
+    }
+
+    let symbols = macho::parse(data);
+    let total_size = symbols.iter().map(|s| s.size).sum();
+
+    let d = Data {
+        symbols,
         file_size: fs::metadata(path).unwrap().len(),
         text_size: total_size,
     };
