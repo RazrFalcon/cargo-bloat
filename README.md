@@ -21,39 +21,38 @@ Get a list of the biggest functions in the release build:
 Compiling ...
 Analyzing target/release/cargo-bloat
 
- File  .text    Size        Crate Name
-20.2%  86.6%  1.2MiB              [3651 Others]
- 0.8%   3.2% 47.4KiB regex_syntax <regex_syntax::ast::parse::ParserI<'s, P>>::parse_with_comments
- 0.4%   1.8% 25.7KiB         clap clap::app::parser::Parser::get_matches_with
- 0.3%   1.5% 21.6KiB  cargo_bloat cargo_bloat::process_crate
- 0.3%   1.1% 16.5KiB       goblin <goblin::mach::load_command::CommandVariant as scroll::ctx::Tr...
- 0.3%   1.1% 16.0KiB         clap clap::app::help::Help::write_arg
- 0.2%   1.0% 15.3KiB         clap clap::app::validator::Validator::validate_matched_args
- 0.2%   1.0% 14.5KiB  cargo_bloat cargo_bloat::main
- 0.2%   0.9% 13.7KiB        regex regex::exec::ExecBuilder::build
- 0.2%   0.9% 12.6KiB         clap clap::app::help::Help::write_help
- 0.2%   0.8% 12.2KiB         clap clap::app::usage::get_required_usage_from
-23.3% 100.0%  1.4MiB              .text section size, the file size is 6.1MiB
+ File  .text     Size       Crate Name
+ 0.9%   7.1%  27.0KiB cargo_bloat cargo_bloat::main
+ 0.8%   5.7%  21.4KiB cargo_bloat cargo_bloat::process_crate
+ 0.3%   2.3%   8.6KiB   [Unknown] read_line_info
+ 0.3%   2.1%   7.9KiB         std std::sys::unix::process::process_common::Command::capture_env
+ 0.3%   2.1%   7.8KiB        json json::parser::Parser::parse
+ 0.2%   1.7%   6.5KiB   [Unknown] elf_add
+ 0.2%   1.7%   6.3KiB         std __rdos_backtrace_dwarf_add
+ 0.2%   1.3%   5.0KiB         std <rustc_demangle::legacy::Demangle as core::fmt::Display>::fmt
+ 0.2%   1.3%   4.9KiB         std std::sys_common::backtrace::_print
+ 0.2%   1.3%   4.8KiB         std core::num::flt2dec::strategy::dragon::format_shortest
+ 9.8%  73.5% 278.0KiB             And 932 smaller methods. Use -n N to show more.
+13.3% 100.0% 378.0KiB             .text section size, the file size is 2.8MiB
 ```
 
 Get a list of the biggest dependencies in the release build:
 ```
-% cargo bloat --release --crates -n 10
+% cargo bloat --release --crates
 Compiling ...
 Analyzing target/release/cargo-bloat
 
- File  .text     Size Name
- 7.0%  29.9% 437.5KiB std
- 4.8%  20.5% 299.7KiB clap
- 3.3%  14.1% 206.7KiB regex_syntax
- 2.3%   9.8% 143.2KiB regex
- 2.2%   9.4% 137.5KiB goblin
- 1.6%   6.8%  99.4KiB [Unknown]
- 0.7%   3.1%  45.4KiB cargo_bloat
- 0.5%   2.3%  33.2KiB serde_json
- 0.2%   1.0%  14.8KiB object
- 0.2%   0.7%  10.2KiB rustc_demangle
-23.3% 100.0%   1.4MiB .text section size, the file size is 6.1MiB
+ File  .text     Size Crate
+ 8.1%  61.2% 231.5KiB std
+ 2.5%  19.2%  72.4KiB cargo_bloat
+ 1.2%   9.4%  35.5KiB [Unknown]
+ 1.0%   7.2%  27.2KiB json
+ 0.3%   2.2%   8.5KiB pico_args
+ 0.1%   0.4%   1.7KiB multimap
+ 0.0%   0.3%   1.1KiB memmap
+ 0.0%   0.0%     175B term_size
+ 0.0%   0.0%      45B time
+13.3% 100.0% 378.0KiB .text section size, the file size is 2.8MiB
 
 Note: numbers above are a result of guesswork. They are not 100% correct and never will be.
 ```
@@ -67,19 +66,19 @@ Get a list of the biggest functions in the release build filtered by the regexp:
 Compiling ...
 Analyzing target/release/cargo-bloat
 
-File .text   Size     Crate Name
-0.0%  0.0%    82B           [10 Others]
-0.0%  0.1%   976B       std __udivmodti4
-0.0%  0.0%   153B       std __rust_start_panic
-0.0%  0.0%   128B       std __rust_maybe_catch_panic
-0.0%  0.0%   101B [Unknown] __libc_csu_init
-0.0%  0.0%    67B [Unknown] __pthread_atfork
-0.0%  0.0%    45B       std __rust_probestack
-0.0%  0.0%    45B       std __rde_alloc_zeroed
-0.0%  0.0%    45B       std __rde_dealloc
-0.0%  0.0%    45B       std __rde_alloc
-0.0%  0.0%    40B       std __rde_realloc
-0.0%  0.1% 1.7KiB           filtered data size, the file size is 6.1MiB
+File .text    Size Crate Name
+0.2%  1.7%  6.3KiB   std __rdos_backtrace_dwarf_add
+0.1%  0.5%  1.9KiB   std __rdos_backtrace_qsort
+0.0%  0.2%    843B   std __udivmodti4
+0.0%  0.1%    296B   std __floattidf
+0.0%  0.1%    290B   std __floattisf
+0.0%  0.1%    284B   std __rdos_backtrace_initialize
+0.0%  0.1%    253B   std __floatuntisf
+0.0%  0.1%    253B   std __floatuntidf
+0.0%  0.1%    211B   std __rdos_backtrace_get_view
+0.0%  0.0%    180B   std __rdos_backtrace_vector_grow
+0.1%  0.7%  2.8KiB       And 37 smaller methods. Use -n N to show more.
+0.5%  3.6% 13.5KiB       filtered data size, the file size is 2.8MiB
 ```
 
 Flags specific for the `cargo-bloat`:

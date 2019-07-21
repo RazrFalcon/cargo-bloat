@@ -6,8 +6,6 @@ use multimap::MultiMap;
 
 use json::object;
 
-mod ar;
-
 #[cfg(all(unix, not(target_os = "macos")))]
 mod elf32;
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -16,6 +14,7 @@ mod elf64;
 #[cfg(target_os = "macos")]
 mod macho;
 
+mod ar;
 mod parser;
 mod table;
 
@@ -882,10 +881,12 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
             dd.symbols.len() - table.rows_count()
         };
 
-        let percent_file_s = other_total as f64 / dd.file_size as f64 * 100.0;
-        let percent_text_s = other_total as f64 / dd.text_size as f64 * 100.0;
-        let name_s = format!("And {} smaller methods. Use -n N to show more.", others_count);
-        push_row(table, percent_file_s, percent_text_s, other_total, String::new(), name_s);
+        if others_count > 0 {
+            let percent_file_s = other_total as f64 / dd.file_size as f64 * 100.0;
+            let percent_text_s = other_total as f64 / dd.text_size as f64 * 100.0;
+            let name_s = format!("And {} smaller methods. Use -n N to show more.", others_count);
+            push_row(table, percent_file_s, percent_text_s, other_total, String::new(), name_s);
+        }
     }
 
     if has_filter {
