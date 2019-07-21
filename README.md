@@ -12,6 +12,14 @@ Inspired by [google/bloaty](https://github.com/google/bloaty).
 cargo install cargo-bloat
 ```
 
+or
+
+```bash
+cargo install cargo-bloat --features regex-filter
+```
+
+if you need regex filtering using the `--filter` option.
+
 ### Usage
 
 Get a list of the biggest functions in the release build:

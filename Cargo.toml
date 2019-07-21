@@ -1,6 +1,6 @@
 [package]
 name = "cargo-bloat"
-version = "0.7.2"
+version = "0.8.0"
 authors = ["Evgeniy Reizner <razrfalcon@gmail.com>"]
 description = "Find out what takes most of the space in your executable."
 categories = ["development-tools::cargo-plugins"]
