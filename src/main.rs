@@ -5,11 +5,11 @@ use std::process::{self, Command};
 use structopt::clap::AppSettings;
 use structopt::StructOpt;
 
-use serde_derive::{Serialize, Deserialize};
-
 use regex::Regex;
 
 use multimap::MultiMap;
+
+use json::object;
 
 mod ar;
 
@@ -142,29 +142,6 @@ struct CrateData {
     times: Vec<Elapsed>,
 }
 
-#[derive(Deserialize, Debug)]
-struct Target {
-    name: String,
-    crate_types: Vec<String>,
-    #[serde(skip)]
-    __do_not_match_exhaustively: (),
-}
-
-#[derive(Deserialize, Debug)]
-struct BuildOutput {
-    target: Option<Target>,
-    filenames: Option<Vec<String>>,
-    #[serde(skip)]
-    __do_not_match_exhaustively: (),
-}
-
-#[derive(Deserialize, Debug)]
-struct Metadata {
-    workspace_root: String,
-    #[serde(skip)]
-    __do_not_match_exhaustively: (),
-}
-
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum ArtifactKind {
     Binary,
@@ -179,7 +156,7 @@ struct Artifact {
     path: path::PathBuf,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone)]
 struct Elapsed {
     crate_name: String,
     time: u64,
@@ -378,14 +355,12 @@ fn wrapper_mode(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 
     // TODO: the same crates but with different versions?
 
-    let elapsed = Elapsed {
-        crate_name,
-        time: end - start,
-        build_script,
-    };
-
     // `cargo` will ignore raw JSON, so we have to use a prefix
-    eprintln!("json-time {}", serde_json::to_string(&elapsed).unwrap());
+    eprintln!("json-time {}", object!{
+        "crate_name" => crate_name,
+        "time" => end - start,
+        "build_script" => build_script
+    }.dump());
 
     Ok(())
 }
@@ -441,8 +416,9 @@ fn get_workspace_root() -> Result<String, Error> {
 
     let stdout = str::from_utf8(&output.stdout).unwrap();
     for line in stdout.lines() {
-        let meta: Metadata = serde_json::from_str(line).map_err(|_| Error::InvalidCargoOutput)?;
-        return Ok(meta.workspace_root);
+        let meta = json::parse(line).map_err(|_| Error::InvalidCargoOutput)?;
+        let root = meta["workspace_root"].as_str().ok_or_else(|| Error::InvalidCargoOutput)?;
+        return Ok(root.to_string());
     }
 
     Err(Error::InvalidCargoOutput)
@@ -489,12 +465,13 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     let mut artifacts = Vec::new();
     let stdout = str::from_utf8(&output.stdout).unwrap();
     for line in stdout.lines() {
-        let build: BuildOutput = serde_json::from_str(line).map_err(|_| Error::InvalidCargoOutput)?;
-
-        if let Some(target) = build.target {
-            if let Some(ref filenames) = build.filenames {
-                for (path, crate_type) in filenames.iter().zip(target.crate_types) {
-                    let kind = match crate_type.as_str() {
+        let build = json::parse(line).map_err(|_| Error::InvalidCargoOutput)?;
+        if let Some(target_name) = build["target"]["name"].as_str() {
+            if !build["filenames"].is_null() {
+                let filenames = build["filenames"].members();
+                let crate_types = build["target"]["crate_types"].members();
+                for (path, crate_type) in filenames.zip(crate_types) {
+                    let kind = match crate_type.as_str().unwrap() {
                         "bin" => ArtifactKind::Binary,
                         "lib" => ArtifactKind::Library,
                         "cdylib" => ArtifactKind::CDynLib,
@@ -504,8 +481,8 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
                     artifacts.push({
                         Artifact {
                             kind,
-                            name: target.name.replace("-", "_"),
-                            path: path::PathBuf::from(&path),
+                            name: target_name.replace("-", "_"),
+                            path: path::PathBuf::from(&path.as_str().unwrap()),
                         }
                     });
                 }
@@ -522,9 +499,13 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
             }
 
             // Try to parse wrapper output first.
-            if let Ok(elapsed) = serde_json::from_str::<Elapsed>(&line[10..]) {
-                times.push(elapsed);
-            }
+            let value = json::parse(&line[10..]).unwrap();
+
+            times.push(Elapsed {
+                crate_name: value["crate_name"].as_str().unwrap().to_string(),
+                time: value["time"].as_u64().unwrap(),
+                build_script: value["build_script"].as_bool().unwrap(),
+            });
         }
     }
 
