@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Custom ELF and Mach-O parsers.
 
 ### Changed
+- Filtering using `regex` is optional now. You can enable it via `--features regex-filter`.
 - Use `json` instead of `serde_json`.
 - Use `pico-args` instead of `structopt`.
 

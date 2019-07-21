@@ -2,8 +2,6 @@ use std::{fs, fmt, path, str};
 use std::collections::HashMap;
 use std::process::{self, Command};
 
-use regex::Regex;
-
 use multimap::MultiMap;
 
 use json::object;
@@ -790,20 +788,31 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
     enum FilterBy {
         None,
         Crate(String),
-        Regex(Regex),
+        #[cfg(feature = "regex-filter")]
+        Regex(regex::Regex),
+        #[cfg(not(feature = "regex-filter"))]
+        Substring(String),
     }
 
     let filter = if let Some(ref text) = args.filter {
         if d.std_crates.contains(text) || d.dep_crates.contains(text) {
             FilterBy::Crate(text.clone())
         } else {
-            match Regex::new(text) {
-                Ok(re) => FilterBy::Regex(re),
-                Err(_) => {
-                    eprintln!("Warning: the filter value contains an unknown crate \
+            #[cfg(feature = "regex-filter")]
+            {
+                match regex::Regex::new(text) {
+                    Ok(re) => FilterBy::Regex(re),
+                    Err(_) => {
+                        eprintln!("Warning: the filter value contains an unknown crate \
                                or an invalid regexp. Ignored.");
-                    FilterBy::None
+                        FilterBy::None
+                    }
                 }
+            }
+
+            #[cfg(not(feature = "regex-filter"))]
+            {
+                FilterBy::Substring(text.clone())
             }
         }
     } else {
@@ -842,8 +851,15 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
                     continue;
                 }
             }
+            #[cfg(feature = "regex-filter")]
             FilterBy::Regex(ref re) => {
                 if !re.is_match(&name) {
+                    continue;
+                }
+            }
+            #[cfg(not(feature = "regex-filter"))]
+            FilterBy::Substring(ref s) => {
+                if !name.contains(s) {
                     continue;
                 }
             }

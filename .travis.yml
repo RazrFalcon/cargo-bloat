@@ -6,3 +6,6 @@ matrix:
     - os: osx
 rust:
   - stable
+script:
+  - cargo build
+  - cargo build --features regex-filter

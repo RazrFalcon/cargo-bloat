@@ -59,6 +59,9 @@ Note: numbers above are a result of guesswork. They are not 100% correct and nev
 ```
 
 Get a list of the biggest functions in the release build filtered by the regexp:
+
+**Note**: you have to build `cargo-bloat` with a `regex-filter` feature enabled.
+
 ```
 % cargo bloat --release --filter '^__' -n 10
 Compiling ...
