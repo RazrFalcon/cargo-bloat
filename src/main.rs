@@ -2,9 +2,6 @@ use std::{fs, fmt, path, str};
 use std::collections::HashMap;
 use std::process::{self, Command};
 
-use structopt::clap::AppSettings;
-use structopt::StructOpt;
-
 use regex::Regex;
 
 use multimap::MultiMap;
@@ -25,102 +22,6 @@ mod parser;
 mod table;
 
 use crate::table::Table;
-
-
-#[derive(StructOpt)]
-#[structopt(bin_name = "cargo")]
-#[structopt(author = "")]
-enum Opts {
-    #[structopt(
-        name = "bloat",
-        raw(
-            setting = "AppSettings::UnifiedHelpMessage",
-            setting = "AppSettings::DeriveDisplayOrder",
-            setting = "AppSettings::DontCollapseArgsInUsage"
-        )
-    )]
-    /// Find out what takes most of the space in your executable
-    Bloat(Args),
-}
-
-#[derive(StructOpt)]
-struct Args {
-    #[structopt(long = "bin", value_name = "NAME")]
-    /// Build only the specified binary
-    bin: Option<String>,
-
-    #[structopt(long = "example", value_name = "NAME")]
-    /// Build only the specified example
-    example: Option<String>,
-
-    #[structopt(long = "test", value_name = "NAME")]
-    /// Build only the specified test target
-    test: Option<String>,
-
-    #[structopt(long = "release")]
-    /// Build artifacts in release mode, with optimizations
-    release: bool,
-
-    #[structopt(short = "j", long = "jobs", value_name = "N")]
-    /// Number of parallel jobs, defaults to # of CPUs
-    jobs: Option<u32>,
-
-    #[structopt(long = "features", value_name = "FEATURES")]
-    /// Space-separated list of features to activate
-    features: Option<String>,
-
-    #[structopt(long = "all-features")]
-    /// Activate all available features
-    all_features: bool,
-
-    #[structopt(long = "no-default-features")]
-    /// Do not activate the `default` feature
-    no_default_features: bool,
-
-    #[structopt(long = "target", value_name = "TARGET")]
-    /// Build for the target triple
-    target: Option<String>,
-
-    #[structopt(long = "target-dir", value_name = "DIRECTORY")]
-    /// Directory for all generated artifacts
-    target_dir: Option<String>,
-
-    #[structopt(long = "frozen")]
-    /// Require Cargo.lock and cache are up to date
-    frozen: bool,
-
-    #[structopt(long = "locked")]
-    /// Require Cargo.lock is up to date
-    locked: bool,
-
-    #[structopt(long = "crates")]
-    /// Per crate bloatedness
-    crates: bool,
-
-    #[structopt(long = "time")]
-    /// Per crate build time. Will run `cargo clean` first
-    time: bool,
-
-    #[structopt(long = "filter", value_name = "CRATE|REGEXP")]
-    /// Filter functions by crate
-    filter: Option<String>,
-
-    #[structopt(long = "split-std")]
-    /// Split the 'std' crate to original crates like core, alloc, etc.
-    split_std: bool,
-
-    #[structopt(long = "full-fn")]
-    /// Print full function name with hash values
-    full_fn: bool,
-
-    #[structopt(short = "n", default_value = "20", value_name = "NUM")]
-    /// Number of lines to show, 0 to show all
-    n: usize,
-
-    #[structopt(short = "w", long = "wide")]
-    /// Do not trim long function names
-    wide: bool,
-}
 
 struct SymbolData {
     name: String,
@@ -245,7 +146,32 @@ fn main() {
         }
     }
 
-    let Opts::Bloat(args) = Opts::from_args();
+    let mut args: Vec<String> = std::env::args().collect();
+    args.remove(0); // file path
+    if args.get(0).map(|a| a.as_str()) == Some("bloat") {
+        args.remove(0);
+    } else {
+        eprintln!("Error: qwe.");
+        process::exit(1);
+    }
+
+    let args = match parse_args(args) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: {}.", e);
+            process::exit(1);
+        }
+    };
+
+    if args.help {
+        println!("{}", HELP);
+        return;
+    }
+
+    if args.version {
+        println!("{}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
 
     let crate_data = match process_crate(&args) {
         Ok(v) => v,
@@ -299,6 +225,91 @@ fn main() {
     if args.time && args.jobs != Some(1) {
         println!("Note: prefer using -j1 argument to disable a multithreaded build.");
     }
+}
+
+const HELP: &str = "\
+Find out what takes most of the space in your executable
+
+USAGE:
+    cargo bloat [OPTIONS]
+
+OPTIONS:
+    -h, --help                      Prints help information
+    -V, --version                   Prints version information
+        --bin <NAME>                Build only the specified binary
+        --example <NAME>            Build only the specified example
+        --test <NAME>               Build only the specified test target
+        --release                   Build artifacts in release mode, with optimizations
+    -j, --jobs <N>                  Number of parallel jobs, defaults to # of CPUs
+        --features <FEATURES>       Space-separated list of features to activate
+        --all-features              Activate all available features
+        --no-default-features       Do not activate the `default` feature
+        --target <TARGET>           Build for the target triple
+        --target-dir <DIRECTORY>    Directory for all generated artifacts
+        --frozen                    Require Cargo.lock and cache are up to date
+        --locked                    Require Cargo.lock is up to date
+        --crates                    Per crate bloatedness
+        --time                      Per crate build time. Will run `cargo clean` first
+        --filter <CRATE|REGEXP>     Filter functions by crate
+        --split-std                 Split the 'std' crate to original crates like core, alloc, etc.
+        --full-fn                   Print full function name with hash values
+    -n <NUM>                        Number of lines to show, 0 to show all [default: 20]
+    -w, --wide                      Do not trim long function names
+";
+
+struct Args {
+    help: bool,
+    version: bool,
+    bin: Option<String>,
+    example: Option<String>,
+    test: Option<String>,
+    release: bool,
+    jobs: Option<u32>,
+    features: Option<String>,
+    all_features: bool,
+    no_default_features: bool,
+    target: Option<String>,
+    target_dir: Option<String>,
+    frozen: bool,
+    locked: bool,
+    crates: bool,
+    time: bool,
+    filter: Option<String>,
+    split_std: bool,
+    full_fn: bool,
+    n: usize,
+    wide: bool,
+}
+
+fn parse_args(raw_args: Vec<String>) -> Result<Args, pico_args::Error> {
+    let mut input = pico_args::Arguments::from_args(raw_args);
+    let args = Args {
+        help:                   input.contains(["-h", "--help"]),
+        version:                input.contains(["-V", "--version"]),
+        bin:                    input.value_from_str("--bin")?,
+        example:                input.value_from_str("--example")?,
+        test:                   input.value_from_str("--test")?,
+        release:                input.contains("--release"),
+        jobs:                   input.value_from_str(["-j", "--jobs"])?,
+        features:               input.value_from_str("--features")?,
+        all_features:           input.contains("--all-features"),
+        no_default_features:    input.contains("--no-default-features"),
+        target:                 input.value_from_str("--target")?,
+        target_dir:             input.value_from_str("--target-dir")?,
+        frozen:                 input.contains("--frozen"),
+        locked:                 input.contains("--locked"),
+        crates:                 input.contains("--crates"),
+        time:                   input.contains("--time"),
+        filter:                 input.value_from_str("--filter")?,
+        split_std:              input.contains("--split-std"),
+        full_fn:                input.contains("--full-fn"),
+        n:                      input.value_from_str("-n")?.unwrap_or(20),
+        wide:                   input.contains(["-w", "--wide"]),
+    };
+
+    input.finish()?;
+
+    Ok(args)
 }
 
 fn wrapper_mode(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {

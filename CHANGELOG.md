@@ -8,10 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - Custom ELF and Mach-O parsers.
 
+### Changed
+- Use `json` instead of `serde_json`.
+- Use `pico-args` instead of `structopt`.
+
 ### Removed
 - `object` dependency.
 - `goblin` dependency.
-- `serde` dependency.
 
 ## [0.7.2] - 2019-07-13
 ### Added
