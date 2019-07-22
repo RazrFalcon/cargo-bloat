@@ -148,7 +148,7 @@ fn main() {
     if args.get(0).map(|a| a.as_str()) == Some("bloat") {
         args.remove(0);
     } else {
-        eprintln!("Error: qwe.");
+        eprintln!("Error: can be run only via `cargo bloat`.");
         process::exit(1);
     }
 
