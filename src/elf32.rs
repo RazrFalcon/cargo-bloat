@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use crate::SymbolData;
 use crate::parser::*;
 
@@ -33,11 +35,15 @@ pub(crate) fn parse(data: &[u8], byte_order: ByteOrder) -> Vec<SymbolData> {
     parse_section_header(data, s, sections_count)
 }
 
+struct Section {
+    kind: u32,
+    link: usize,
+    range: Range<usize>,
+    entries: usize,
+}
+
 fn parse_section_header(data: &[u8], mut s: Stream, count: u16) -> Vec<SymbolData> {
-    let mut after_sym_table = false;
-    let mut symbols_count = 0;
-    let mut symbols_range = 0..0;
-    let mut strings_range = 0..0;
+    let mut sections = Vec::with_capacity(count as usize);
     for _ in 0..count {
         s.skip::<elf::Word>(); // name
         let kind: elf::Word = s.read();
@@ -45,51 +51,50 @@ fn parse_section_header(data: &[u8], mut s: Stream, count: u16) -> Vec<SymbolDat
         s.skip::<elf::Address>(); // addr
         let offset = s.read::<elf::Offset>() as usize;
         let size = s.read::<elf::Word>() as usize;
-        s.skip::<elf::Word>(); // link
+        let link = s.read::<elf::Word>() as usize;
         s.skip::<elf::Word>(); // info
         s.skip::<elf::Word>(); // addralign
-        let entry_size: elf::Word = s.read();
+        let entry_size = s.read::<elf::Word>() as usize;
 
-        if after_sym_table {
-            // A section after a symbol table should be string table.
-            if kind != section_type::STRING_TABLE {
-                return Vec::new();
-            }
+        let entries = if entry_size == 0 { 0 } else { size / entry_size };
 
-            strings_range = offset..offset+size;
-            break;
-        }
-
-        if kind == section_type::SYMBOL_TABLE {
-            // A symbol table entry cannot have a zero size.
-            if entry_size == 0 {
-                return Vec::new();
-            }
-
-            symbols_count = size / entry_size as usize;
-            symbols_range = offset..offset+size;
-            after_sym_table = true;
-        }
+        sections.push(Section {
+            kind,
+            link,
+            range: offset..(offset + size),
+            entries,
+        });
     }
 
-    if symbols_range == (0..0) || strings_range == (0..0) {
+    let section = match sections.iter().find(|v| v.kind == section_type::SYMBOL_TABLE) {
+        Some(v) => v,
+        None => return Vec::new(),
+    };
+
+    let linked_section = match sections.get(section.link) {
+        Some(v) => v,
+        None => return Vec::new(),
+    };
+
+    if linked_section.kind != section_type::STRING_TABLE {
         return Vec::new();
     }
 
-    let strings = &data[strings_range];
-    let s = Stream::new(&data[symbols_range], s.byte_order());
-    parse_symbols(s, symbols_count, strings)
+    let strings = &data[linked_section.range.clone()];
+    let s = Stream::new(&data[section.range.clone()], s.byte_order());
+    parse_symbols(s, section.entries, strings)
 }
 
 fn parse_symbols(mut s: Stream, count: usize, strings: &[u8]) -> Vec<SymbolData> {
     let mut symbols = Vec::with_capacity(count);
     while !s.at_end() {
+        // Note: the order of fields in 32 and 64 bit ELF is different.
         let name_offset = s.read::<elf::Word>() as usize;
+        s.skip::<elf::Address>(); // value
+        let size: elf::Word = s.read();
         let info: u8 = s.read();
         s.skip::<u8>(); // other
         s.skip::<elf::Half>(); // shndx
-        s.skip::<elf::Address>(); // value
-        let size: elf::Word = s.read();
 
         // Ignore symbols with zero size.
         if size == 0 {
