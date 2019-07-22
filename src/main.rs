@@ -6,15 +6,10 @@ use multimap::MultiMap;
 
 use json::object;
 
-#[cfg(all(unix, not(target_os = "macos")))]
-mod elf32;
-#[cfg(all(unix, not(target_os = "macos")))]
-mod elf64;
-
-#[cfg(target_os = "macos")]
-mod macho;
-
 mod ar;
+mod elf32;
+mod elf64;
+mod macho;
 mod parser;
 mod table;
 
@@ -72,10 +67,7 @@ enum Error {
     OpenFailed(path::PathBuf),
     InvalidCargoOutput,
     NoArtifacts,
-    #[cfg(all(unix, not(target_os = "macos")))]
-    NotAnElf(path::PathBuf),
-    #[cfg(target_os = "macos")]
-    NotAMachO(path::PathBuf),
+    UnsupportedFileFormat(path::PathBuf),
 }
 
 impl fmt::Display for Error {
@@ -109,13 +101,8 @@ impl fmt::Display for Error {
             Error::NoArtifacts => {
                 write!(f, "'cargo' does not produce any build artifacts")
             }
-            #[cfg(all(unix, not(target_os = "macos")))]
-            Error::NotAnElf(ref path) => {
-                write!(f, "'{}' is not an ELF file", path.display())
-            }
-            #[cfg(target_os = "macos")]
-            Error::NotAMachO(ref path) => {
-                write!(f, "'{}' is not an Mach-O file", path.display())
+            Error::UnsupportedFileFormat(ref path) => {
+                write!(f, "'{}' has an unsupported file format", path.display())
             }
         }
     }
@@ -706,29 +693,34 @@ fn collect_deps_symbols(
     Ok(map)
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
 fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
     let file = map_file(&path)?;
     let data = &file;
 
-    if data.len() < 16 {
-        return Err(Error::NotAnElf(path.to_owned()));
+    match data.get(0..4) {
+        Some(b"\x7fELF") if data.len() >= 8 => {
+            collect_elf_data(path, data)
+        }
+        Some(&[0xCF, 0xFA, 0xED, 0xFE]) => {
+            collect_macho_data(path, data)
+        }
+        _ => {
+            Err(Error::UnsupportedFileFormat(path.to_owned()))
+        }
     }
+}
 
-    if &data[0..4] != b"\x7fELF" {
-        return Err(Error::NotAnElf(path.to_owned()));
-    }
-
+fn collect_elf_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
     let is_64_bit = match data[4] {
         1 => false,
         2 => true,
-        _ => return Err(Error::NotAnElf(path.to_owned())),
+        _ => return Err(Error::UnsupportedFileFormat(path.to_owned())),
     };
 
     let byte_order = match data[5] {
         1 => parser::ByteOrder::LittleEndian,
         2 => parser::ByteOrder::BigEndian,
-        _ => return Err(Error::NotAnElf(path.to_owned())),
+        _ => return Err(Error::UnsupportedFileFormat(path.to_owned())),
     };
 
     let symbols = if is_64_bit {
@@ -748,15 +740,7 @@ fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
     Ok(d)
 }
 
-#[cfg(target_os = "macos")]
-fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
-    let file = map_file(&path)?;
-    let data = &file;
-
-    if data.get(0..4) != Some(&[0xCF, 0xFA, 0xED, 0xFE]) {
-        return Err(Error::NotAMachO(path.to_owned()));
-    }
-
+fn collect_macho_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
     let symbols = macho::parse(data);
     let total_size = symbols.iter().map(|s| s.size).sum();
 

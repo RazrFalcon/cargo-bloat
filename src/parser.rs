@@ -102,7 +102,6 @@ impl<'a> Stream<'a> {
         }
     }
 
-    #[cfg(target_os = "macos")]
     #[inline]
     pub fn new_at(data: &'a [u8], offset: usize, byte_order: ByteOrder) -> Self {
         Stream {
@@ -112,7 +111,6 @@ impl<'a> Stream<'a> {
         }
     }
 
-    #[allow(dead_code)]
     #[inline]
     pub fn byte_order(&self) -> ByteOrder {
         self.byte_order
