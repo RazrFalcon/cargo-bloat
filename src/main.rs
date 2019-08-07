@@ -130,9 +130,9 @@ fn main() {
         }
     }
 
-    let mut args: Vec<String> = std::env::args().collect();
+    let mut args: Vec<_> = std::env::args_os().collect();
     args.remove(0); // file path
-    if args.get(0).map(|a| a.as_str()) == Some("bloat") {
+    if args.get(0).and_then(|s| s.to_str()) == Some("bloat") {
         args.remove(0);
     } else {
         eprintln!("Error: can be run only via `cargo bloat`.");
@@ -207,7 +207,7 @@ fn main() {
     }
 
     if args.time && args.jobs != Some(1) {
-        println!("Note: prefer using -j1 argument to disable a multithreaded build.");
+        println!("Note: prefer using `-j 1` argument to disable a multithreaded build.");
     }
 }
 
@@ -265,8 +265,8 @@ struct Args {
     wide: bool,
 }
 
-fn parse_args(raw_args: Vec<String>) -> Result<Args, pico_args::Error> {
-    let mut input = pico_args::Arguments::from_args(raw_args);
+fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Error> {
+    let mut input = pico_args::Arguments::from_vec(raw_args);
     let args = Args {
         help:                   input.contains(["-h", "--help"]),
         version:                input.contains(["-V", "--version"]),
