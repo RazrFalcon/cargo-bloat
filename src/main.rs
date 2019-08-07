@@ -223,6 +223,7 @@ OPTIONS:
         --bin <NAME>                Build only the specified binary
         --example <NAME>            Build only the specified example
         --test <NAME>               Build only the specified test target
+    -p, --package <SPEC>            Package to build
         --release                   Build artifacts in release mode, with optimizations
     -j, --jobs <N>                  Number of parallel jobs, defaults to # of CPUs
         --features <FEATURES>       Space-separated list of features to activate
@@ -247,6 +248,7 @@ struct Args {
     bin: Option<String>,
     example: Option<String>,
     test: Option<String>,
+    package: Option<String>,
     release: bool,
     jobs: Option<u32>,
     features: Option<String>,
@@ -273,6 +275,7 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
         bin:                    input.value_from_str("--bin")?,
         example:                input.value_from_str("--example")?,
         test:                   input.value_from_str("--test")?,
+        package:                input.value_from_str(["-p", "--package"])?,
         release:                input.contains("--release"),
         jobs:                   input.value_from_str(["-j", "--jobs"])?,
         features:               input.value_from_str("--features")?,
@@ -605,6 +608,10 @@ fn get_cargo_args(args: &Args) -> Vec<String> {
         list.push(format!("--example={}", example));
     } else if let Some(ref test) = args.test {
         list.push(format!("--test={}", test));
+    }
+
+    if let Some(ref package) = args.package {
+        list.push(format!("--package={}", package));
     }
 
     if args.all_features {
