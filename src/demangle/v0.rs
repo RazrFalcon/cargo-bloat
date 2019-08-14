@@ -769,7 +769,13 @@ impl<'a, 's> Printer<'a, 's> {
                 if tag != b'Y' {
                     // Ignore the `impl`'s own path.
                     parse!(self, disambiguator);
-                    parse!(self, skip_path);
+
+                    // `rustc-demangle` ignores this path since it makes
+                    // a symbol name too verbose, but we need it to extract a crate name.
+                    // So we will print it as usual and then remove it from an output buffer.
+                    let start = self.out.len();
+                    self.print_path(in_value)?;
+                    self.out.drain(start..);
                 }
 
                 self.out.push_str("<");

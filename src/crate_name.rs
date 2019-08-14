@@ -125,9 +125,8 @@ fn parse_crate_from_sym(sym: &str) -> String {
 fn parse_sym_v0(d: &CrateData, sym: &str) -> (String, bool) {
     let name = parse_crate_from_sym(sym);
 
-    // Check that such crate name is an actual dependency.
-    // This is required to filter some obscure symbols like:
-    // <str>::replace::<&str>
+    // Check that such crate name is an actual dependency
+    // and not some random string.
     if d.std_crates.contains(&name) || d.dep_crates.contains(&name) {
         (name, false)
     } else {
