@@ -7,6 +7,8 @@ use multimap::MultiMap;
 use json::object;
 
 mod ar;
+mod crate_name;
+mod demangle;
 mod elf32;
 mod elf64;
 mod macho;
@@ -16,7 +18,7 @@ mod table;
 use crate::table::Table;
 
 struct SymbolData {
-    name: String,
+    name: demangle::SymbolName,
     size: u64,
 }
 
@@ -26,7 +28,7 @@ struct Data {
     text_size: u64,
 }
 
-struct CrateData {
+pub(crate) struct CrateData {
     exe_path: Option<String>,
     data: Data,
     std_crates: Vec<String>,
@@ -238,11 +240,11 @@ OPTIONS:
         --filter <CRATE|REGEXP>     Filter functions by crate
         --split-std                 Split the 'std' crate to original crates like core, alloc, etc.
         --full-fn                   Print full function name with hash values
-    -n <NUM>                        Number of lines to show, 0 to show all [default: 20]
+    -n <NUM>                        Number of functions to show, 0 to show all [default: 20]
     -w, --wide                      Do not trim long function names
 ";
 
-struct Args {
+pub(crate) struct Args {
     help: bool,
     version: bool,
     bin: Option<String>,
@@ -794,7 +796,7 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
                     Ok(re) => FilterBy::Regex(re),
                     Err(_) => {
                         eprintln!("Warning: the filter value contains an unknown crate \
-                               or an invalid regexp. Ignored.");
+                                   or an invalid regexp. Ignored.");
                         FilterBy::None
                     }
                 }
@@ -819,20 +821,17 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
         let percent_file = sym.size as f64 / dd.file_size as f64 * 100.0;
         let percent_text = sym.size as f64 / dd.text_size as f64 * 100.0;
 
-        let (mut crate_name, is_exact) = crate_from_sym(&d, args, &sym.name);
+        let (mut crate_name, is_exact) = crate_name::from_sym(&d, args, &sym.name);
 
         if !is_exact {
             crate_name.push('?');
         }
 
-        let mut name = sym.name.clone();
-
-        // crate::mod::fn::h5fbe0f2f0b5c7342 -> crate::mod::fn
-        if !args.full_fn {
-            if let Some(pos) = name.bytes().rposition(|b| b == b':') {
-                name.drain((pos - 1)..);
-            }
-        }
+        let name = if args.full_fn {
+            sym.name.complete.clone()
+        } else {
+            sym.name.trimmed.clone()
+        };
 
         match filter {
             FilterBy::None => {}
@@ -892,159 +891,12 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
     }
 }
 
-#[derive(Debug)]
-enum Symbol {
-    Function(String),
-    CFunction,
-    Trait(String, String),
-}
-
-// A simple stupid symbol parser.
-// Should be replaced by something better later.
-fn parse_sym(sym: &str) -> Symbol {
-    if !sym.contains("::") {
-        return Symbol::CFunction;
-    }
-
-    // TODO: ` for `
-
-    if sym.contains(" as ") {
-        let parts: Vec<_> = sym.split(" as ").collect();
-        Symbol::Trait(parse_crate_from_sym(parts[0]), parse_crate_from_sym(parts[1]))
-    } else {
-        Symbol::Function(parse_crate_from_sym(sym))
-    }
-}
-
-fn parse_crate_from_sym(sym: &str) -> String {
-    if !sym.contains("::") {
-        return String::new();
-    }
-
-    let mut crate_name = if let Some(s) = sym.split("::").next() {
-        s.to_string()
-    } else {
-        sym.to_string()
-    };
-
-    if crate_name.starts_with("<") {
-        while crate_name.starts_with("<") {
-            crate_name.remove(0);
-        }
-
-        crate_name = crate_name.split_whitespace().last().unwrap().to_owned();
-    }
-
-    crate_name
-}
-
-fn crate_from_sym(d: &CrateData, args: &Args, sym: &str) -> (String, bool) {
-    const UNKNOWN: &str = "[Unknown]";
-
-    let mut is_exact = true;
-
-    // If the symbols aren't present in dependencies - try to figure out
-    // where it was defined.
-    //
-    // The algorithm below is completely speculative.
-    let mut crate_name = match parse_sym(sym) {
-        Symbol::CFunction => {
-            if let Some(name) = d.deps_symbols.get(sym) {
-                name.to_string()
-            } else {
-                // If the symbols is a C function and it wasn't found
-                // in `deps_symbols` that we can't do anything about it.
-                UNKNOWN.to_string()
-            }
-        }
-        Symbol::Function(crate_name) => {
-            // Just a simple function like:
-            // getopts::Options::parse
-
-            if let Some(names) = d.deps_symbols.get_vec(sym) {
-                if names.len() == 1 {
-                    // In case the symbol was instanced in a different crate.
-                    names[0].clone()
-                } else {
-                    crate_name
-                }
-            } else {
-                crate_name
-            }
-        }
-        Symbol::Trait(ref crate_name1, ref crate_name2) => {
-            // <crate_name1::Type as crate_name2::Trait>::fn
-
-            // `crate_name1` can be empty in cases when it's just a type parameter, like:
-            // <T as core::fmt::Display>::fmt::h92003a61120a7e1a
-            if crate_name1.is_empty() {
-                crate_name2.clone()
-            } else {
-                if crate_name1 == crate_name2 {
-                    crate_name1.clone()
-                } else {
-                    // This is an uncertain case.
-                    //
-                    // Example:
-                    // <euclid::rect::TypedRect<f64> as resvg::geom::RectExt>::x
-                    //
-                    // Here we defined and instanced the `RectExt` trait
-                    // in the `resvg` crate, but the first crate is `euclid`.
-                    // Usually, those traits will be present in `deps_symbols`
-                    // so they will be resolved automatically, in other cases it's an UB.
-
-                    if let Some(names) = d.deps_symbols.get_vec(sym) {
-                        if names.contains(crate_name1) {
-                            crate_name1.clone()
-                        } else if names.contains(crate_name2) {
-                            crate_name2.clone()
-                        } else {
-                            // Example:
-                            // <std::collections::hash::map::DefaultHasher as core::hash::Hasher>::finish
-                            // ["cc", "cc", "fern", "fern", "svgdom", "svgdom"]
-
-                            is_exact = false;
-                            crate_name1.clone()
-                        }
-                    } else {
-                        // If the symbol is not in `deps_symbols` then it probably
-                        // was imported/inlined to the crate bin itself.
-
-                        is_exact = false;
-                        crate_name1.clone()
-                    }
-                }
-            }
-        }
-    };
-
-    // If the detected crate is unknown (and not marked as `[Unknown]`),
-    // then mark it as `[Unknown]`.
-    if     crate_name != UNKNOWN
-        && crate_name != "std"
-        && !d.std_crates.contains(&crate_name)
-        && !d.dep_crates.contains(&crate_name)
-        {
-            // There was probably a bug in the code above if we get here.
-            crate_name = UNKNOWN.to_string();
-        }
-
-
-    if !args.split_std {
-        if d.std_crates.contains(&crate_name) {
-            crate_name = "std".to_string();
-        }
-    }
-
-    (crate_name, is_exact)
-}
-
 fn print_crates(d: CrateData, args: &Args, table: &mut Table) {
     let dd = &d.data;
     let mut sizes = HashMap::new();
 
     for sym in dd.symbols.iter() {
-        let (crate_name, _) = crate_from_sym(&d, args, &sym.name);
+        let (crate_name, _) = crate_name::from_sym(&d, args, &sym.name);
 
         if let Some(v) = sizes.get(&crate_name).cloned() {
             sizes.insert(crate_name.to_string(), v + sym.size);

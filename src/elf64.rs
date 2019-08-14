@@ -115,9 +115,8 @@ fn parse_symbols(mut s: Stream, count: usize, strings: &[u8]) -> Vec<SymbolData>
         }
 
         if let Some(s) = parse_null_string(strings, name_offset) {
-            let name = rustc_demangle::demangle(s).to_string();
             symbols.push(SymbolData {
-                name,
+                name: crate::demangle::SymbolName::demangle(s),
                 size,
             });
         }

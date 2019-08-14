@@ -1,6 +1,7 @@
 use std::str;
 
 use crate::parser::*;
+use crate::demangle::SymbolName;
 
 pub fn parse(data: &[u8]) -> Vec<String> {
     const MAGIC: &[u8] = b"!<arch>\x0A";
@@ -67,8 +68,7 @@ fn parse_sysv(data: &[u8]) -> Vec<String> {
 
     for _ in 0..count {
         if let Some(s) = parse_null_string(data, i) {
-            let name = rustc_demangle::demangle(s).to_string();
-            symbols.push(name);
+            symbols.push(SymbolName::demangle(s).complete);
 
             i += s.len() + 1;
         } else {
@@ -95,8 +95,7 @@ fn parse_bsd(data: &[u8]) -> Vec<String> {
     let mut i = 0;
     while i < strings.len() {
         if let Some(s) = parse_null_string(strings, i) {
-            let name = rustc_demangle::demangle(s).to_string();
-            symbols.push(name);
+            symbols.push(SymbolName::demangle(s).complete);
 
             i += s.len() + 1;
         } else {

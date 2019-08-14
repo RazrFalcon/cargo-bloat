@@ -186,9 +186,8 @@ fn parse_symbols(
         };
 
         if let Some(s) = parse_null_string(strings, sym.string_index as usize) {
-            let name = rustc_demangle::demangle(s).to_string();
             symbols.push(SymbolData {
-                name,
+                name: crate::demangle::SymbolName::demangle(s),
                 size,
             });
         }
