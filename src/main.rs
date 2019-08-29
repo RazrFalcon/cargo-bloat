@@ -240,7 +240,7 @@ OPTIONS:
         --filter <CRATE|REGEXP>     Filter functions by crate
         --split-std                 Split the 'std' crate to original crates like core, alloc, etc.
         --full-fn                   Print full function name with hash values
-    -n <NUM>                        Number of functions to show, 0 to show all [default: 20]
+    -n <NUM>                        Number of lines to show, 0 to show all [default: 20]
     -w, --wide                      Do not trim long function names
 ";
 
@@ -925,7 +925,8 @@ fn print_crates(d: CrateData, args: &Args, table: &mut Table) {
         }
     }
 
-    for &(k, v) in list.iter().rev() {
+    let n = if args.n == 0 { list.len() } else { args.n };
+    for &(k, v) in list.iter().rev().take(n) {
         let percent_file = *v as f64 / dd.file_size as f64 * 100.0;
         let percent_text = *v as f64 / dd.text_size as f64 * 100.0;
 
@@ -939,6 +940,25 @@ fn print_crates(d: CrateData, args: &Args, table: &mut Table) {
         };
 
         push_row(table, percent_file, percent_text, *v, time, k.clone());
+    }
+
+    if n < list.len() {
+        let mut other_total = 0;
+        for &(_, v) in list.iter().rev().skip(n) {
+            other_total += *v;
+        }
+
+        let time = if args.time {
+            Some(String::new())
+        } else {
+            None
+        };
+
+        let percent_file_s = other_total as f64 / dd.file_size as f64 * 100.0;
+        let percent_text_s = other_total as f64 / dd.text_size as f64 * 100.0;
+
+        let name = format!("And {} more crates. Use -n N to show more.", list.len() - n);
+        push_row(table, percent_file_s, percent_text_s, other_total, time, name);
     }
 
     {

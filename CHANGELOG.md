@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Changed
+- The `-n` flag affects the crates output too again.
 
 ## [0.8.2] - 2019-08-07
 ### Added
@@ -48,7 +50,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `--time` flag.
 
 ### Changed
-- The `-n` flags affects only the functions table now.
+- The `-n` flag affects only the functions table now.
 
 ## [0.6.4] - 2019-05-13
 ### Fixed
