@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.8.3] - 2019-08-29
+### Added
+- **v0** mangling scheme support.
+
 ### Changed
 - The `-n` flag affects the crates output too again.
 
@@ -143,7 +148,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - When running on an unsupported OS you will get an error and not a random panic.
 - The table has a dynamic column width now.
 
-[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.8.3...HEAD
+[0.8.3]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.7.2...v0.8.0
