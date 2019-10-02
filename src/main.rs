@@ -114,11 +114,6 @@ impl std::error::Error for Error {}
 
 
 fn main() {
-    if cfg!(not(unix)) {
-        eprintln!("This OS is not supported.");
-        process::exit(1);
-    }
-
     if let Ok(wrap) = std::env::var("RUSTC_WRAPPER") {
         if wrap.contains("cargo-bloat") {
             let args: Vec<_> = std::env::args().map(|a| a.to_string()).collect();
