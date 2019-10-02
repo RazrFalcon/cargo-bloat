@@ -91,13 +91,14 @@ File .text    Size Crate Name
 
 Flags specific for the `cargo-bloat`:
 ```
-        --crates                   Per crate bloatedness
-        --time                     Per crate build time. Will run `cargo clean` first
-        --filter <CRATE|REGEXP>    Filter functions by crate
-        --split-std                Split the 'std' crate to original crates like core, alloc, etc.
-        --full-fn                  Print full function name with hash values
-    -n <NUM>                       Number of lines to show, 0 to show all [default: 20]
-    -w, --wide                     Do not trim long function names
+    --crates                   Per crate bloatedness
+    --time                     Per crate build time. Will run `cargo clean` first
+    --filter <CRATE|REGEXP>    Filter functions by crate
+    --split-std                Split the 'std' crate to original crates like core, alloc, etc.
+    --full-fn                  Print full function name with hash values
+-n <NUM>                       Number of lines to show, 0 to show all [default: 20]
+-w, --wide                     Do not trim long function names
+    --message-format <FMT>     Output format [default: table] [possible values: table, json]
 ```
 
 ### License

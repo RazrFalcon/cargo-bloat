@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- `--message-format table|json` option.
+- Better `xargo` support by [@roblabla](https://github.com/roblabla)
+
+### Changed
+- `--crates` and `--time` cannot be used anymore.
 
 ## [0.8.3] - 2019-08-29
 ### Added

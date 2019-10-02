@@ -28,7 +28,7 @@ struct Data {
     text_size: u64,
 }
 
-pub(crate) struct CrateData {
+struct CrateData {
     exe_path: Option<String>,
     data: Data,
     std_crates: Vec<String>,
@@ -159,7 +159,7 @@ fn main() {
         return;
     }
 
-    let crate_data = match process_crate(&args) {
+    let mut crate_data = match process_crate(&args) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("Error: {}.", e);
@@ -168,48 +168,50 @@ fn main() {
     };
 
     if let Some(ref path) = crate_data.exe_path {
-        println!("Analyzing {}", path);
+        eprintln!("Analyzing {}", path);
     }
 
-    let mut table = if args.crates {
-        if args.time {
-            Table::new(&["File", ".text", "Size", "Time", "Crate"])
-        } else {
-            Table::new(&["File", ".text", "Size", "Crate"])
+    if args.crates {
+        let crates = filter_crates(&mut crate_data, &args);
+        match args.message_format {
+            MessageFormat::Table => {
+                print_crates_table(crates, &args, &crate_data.data);
+            }
+            MessageFormat::Json => {
+                print_crates_json(&crates.crates, crate_data.data.text_size, crate_data.data.file_size);
+            }
         }
     } else if args.time {
-        Table::new(&["Time", "Crate"])
+        match args.message_format {
+            MessageFormat::Table => {
+                print_times_table(crate_data.times, &args);
+            }
+            MessageFormat::Json => {
+                print_times_json(crate_data.times);
+            }
+        }
     } else {
-        Table::new(&["File", ".text", "Size", "Crate", "Name"])
-    };
-
-    let term_width = if !args.wide {
-        term_size::dimensions().map(|v| v.0)
-    } else {
-        None
-    };
-    table.set_width(term_width);
-
-
-    if args.crates {
-        print_crates(crate_data, &args, &mut table);
-    } else if args.time {
-        print_times(crate_data, &mut table);
-    } else {
-        print_methods(crate_data, &args, &mut table);
+        let methods = filter_methods(&mut crate_data, &args);
+        match args.message_format {
+            MessageFormat::Table => {
+                print_methods_table(methods, &args, &crate_data.data);
+            }
+            MessageFormat::Json => {
+                print_methods_json(&methods.methods, crate_data.data.text_size, crate_data.data.file_size);
+            }
+        }
     }
 
-    println!();
-    print!("{}", table);
+    if args.message_format == MessageFormat::Table {
+        if args.crates {
+            println!();
+            println!("Note: numbers above are a result of guesswork. \
+                   They are not 100% correct and never will be.");
+        }
 
-    if args.crates {
-        println!();
-        println!("Note: numbers above are a result of guesswork. \
-                  They are not 100% correct and never will be.");
-    }
-
-    if args.time && args.jobs != Some(1) {
-        println!("Note: prefer using `-j 1` argument to disable a multithreaded build.");
+        if args.time && args.jobs != Some(1) {
+            println!("Note: prefer using `-j 1` argument to disable a multithreaded build.");
+        }
     }
 }
 
@@ -242,9 +244,25 @@ OPTIONS:
         --full-fn                   Print full function name with hash values
     -n <NUM>                        Number of lines to show, 0 to show all [default: 20]
     -w, --wide                      Do not trim long function names
+        --message-format <FMT>      Output format [default: table] [possible values: table, json]
 ";
 
-pub(crate) struct Args {
+#[derive(Clone, Copy, PartialEq)]
+enum MessageFormat {
+    Table,
+    Json,
+}
+
+fn parse_message_format(s: &str) -> Result<MessageFormat, &'static str> {
+    match s {
+        "table" => Ok(MessageFormat::Table),
+        "json" => Ok(MessageFormat::Json),
+        _ => Err("invalid message format"),
+    }
+}
+
+
+struct Args {
     help: bool,
     version: bool,
     bin: Option<String>,
@@ -267,6 +285,7 @@ pub(crate) struct Args {
     full_fn: bool,
     n: usize,
     wide: bool,
+    message_format: MessageFormat,
 }
 
 fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Error> {
@@ -294,6 +313,8 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
         full_fn:                input.contains("--full-fn"),
         n:                      input.value_from_str("-n")?.unwrap_or(20),
         wide:                   input.contains(["-w", "--wide"]),
+        message_format:         input.value_from_fn("--message-format", parse_message_format)?
+                                     .unwrap_or(MessageFormat::Table),
     };
 
     input.finish()?;
@@ -441,7 +462,7 @@ fn get_workspace_root() -> Result<String, Error> {
 fn process_crate(args: &Args) -> Result<CrateData, Error> {
     let workspace_root = get_workspace_root()?;
 
-    println!("Compiling ...");
+    eprintln!("Compiling ...");
 
     let output = if args.time {
         // To collect the build times we have to clean the repo first.
@@ -776,20 +797,26 @@ fn collect_macho_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
     Ok(d)
 }
 
-fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
-    fn push_row(table: &mut Table, percent_file: f64, percent_text: f64, size: u64,
-                crate_name: String, name: String)
-    {
-        let percent_file_s = format_percent(percent_file);
-        let percent_text_s = format_percent(percent_text);
-        let size_s = format_size(size);
-        table.push(&[percent_file_s, percent_text_s, size_s, crate_name, name]);
-    }
+struct Methods {
+    has_filter: bool,
+    filter_out_size: u64,
+    filter_out_len: usize,
+    methods: Vec<Method>,
+}
 
+struct Method {
+    name: String,
+    crate_name: String,
+    size: u64,
+}
+
+fn filter_methods(d: &mut CrateData, args: &Args) -> Methods {
     d.data.symbols.sort_by_key(|v| v.size);
 
     let dd = &d.data;
     let n = if args.n == 0 { dd.symbols.len() } else { args.n };
+
+    let mut methods = Vec::with_capacity(n);
 
     enum FilterBy {
         None,
@@ -827,14 +854,10 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
 
     let has_filter = if let FilterBy::None = filter { false } else { true };
 
-    let mut other_total = 0;
-    let mut filter_total = 0;
-    let mut matched_count = 0;
+    let mut filter_out_size = 0;
+    let mut filter_out_len = 0;
 
     for sym in dd.symbols.iter().rev() {
-        let percent_file = sym.size as f64 / dd.file_size as f64 * 100.0;
-        let percent_text = sym.size as f64 / dd.text_size as f64 * 100.0;
-
         let (mut crate_name, is_exact) = crate_name::from_sym(&d, args, &sym.name);
 
         if !is_exact {
@@ -868,44 +891,121 @@ fn print_methods(mut d: CrateData, args: &Args, table: &mut Table) {
             }
         }
 
-        filter_total += sym.size;
-        matched_count += 1;
+        filter_out_len += 1;
 
-        if n == 0 || table.rows_count() < n {
-            push_row(table, percent_file, percent_text, sym.size, crate_name, name);
+        if n == 0 || methods.len() < n {
+            methods.push(Method {
+                name,
+                crate_name,
+                size: sym.size,
+            })
         } else {
-            other_total += sym.size;
+            filter_out_size += sym.size;
         }
     }
 
-    {
-        let others_count = if has_filter {
-            matched_count - table.rows_count()
-        } else {
-            dd.symbols.len() - table.rows_count()
-        };
-
-        if others_count > 0 {
-            let percent_file_s = other_total as f64 / dd.file_size as f64 * 100.0;
-            let percent_text_s = other_total as f64 / dd.text_size as f64 * 100.0;
-            let name_s = format!("And {} smaller methods. Use -n N to show more.", others_count);
-            push_row(table, percent_file_s, percent_text_s, other_total, String::new(), name_s);
-        }
-    }
-
-    if has_filter {
-        let percent_file_s = filter_total as f64 / dd.file_size as f64 * 100.0;
-        let percent_text_s = filter_total as f64 / dd.text_size as f64 * 100.0;
-        let name = format!("filtered data size, the file size is {}", format_size(dd.file_size));
-        push_row(table, percent_file_s, percent_text_s, filter_total, String::new(), name);
-    } else {
-        let percent_file = dd.text_size as f64 / dd.file_size as f64 * 100.0;
-        let name = format!(".text section size, the file size is {}", format_size(dd.file_size));
-        push_row(table, percent_file, 100.0, dd.text_size, String::new(), name);
+    Methods {
+        has_filter,
+        filter_out_size,
+        filter_out_len,
+        methods: methods,
     }
 }
 
-fn print_crates(d: CrateData, args: &Args, table: &mut Table) {
+fn print_methods_table(methods: Methods, args: &Args, data: &Data) {
+    let mut table = Table::new(&["File", ".text", "Size", "Crate", "Name"]);
+
+    let term_width = if !args.wide {
+        term_size::dimensions().map(|v| v.0)
+    } else {
+        None
+    };
+    table.set_width(term_width);
+
+    for method in &methods.methods {
+        table.push(&[
+            format_percent(method.size as f64 / data.file_size as f64 * 100.0),
+            format_percent(method.size as f64 / data.text_size as f64 * 100.0),
+            format_size(method.size),
+            method.crate_name.clone(),
+            method.name.clone(),
+        ]);
+    }
+
+    {
+        let others_count = if methods.has_filter {
+            methods.filter_out_len - methods.methods.len()
+        } else {
+            data.symbols.len() - methods.methods.len()
+        };
+
+        table.push(&[
+            format_percent(methods.filter_out_size as f64 / data.file_size as f64 * 100.0),
+            format_percent(methods.filter_out_size as f64 / data.text_size as f64 * 100.0),
+            format_size(methods.filter_out_size),
+            String::new(),
+            format!("And {} smaller methods. Use -n N to show more.", others_count),
+        ]);
+    }
+
+    if methods.has_filter {
+        let total = methods.methods.iter().fold(0u64, |s, m| s + m.size) + methods.filter_out_size;
+
+        table.push(&[
+            format_percent(total as f64 / data.file_size as f64 * 100.0),
+            format_percent(total as f64 / data.text_size as f64 * 100.0),
+            format_size(total),
+            String::new(),
+            format!("filtered data size, the file size is {}", format_size(data.file_size)),
+        ]);
+    } else {
+        table.push(&[
+            format_percent(data.text_size as f64 / data.file_size as f64 * 100.0),
+            format_percent(100.0),
+            format_size(data.text_size),
+            String::new(),
+            format!(".text section size, the file size is {}", format_size(data.file_size)),
+        ]);
+    }
+
+    println!("{}", table);
+}
+
+fn print_methods_json(methods: &[Method], text_size: u64, file_size: u64) {
+    let mut items = json::JsonValue::new_array();
+    for method in methods {
+        let mut map = json::JsonValue::new_object();
+        if method.crate_name != crate_name::UNKNOWN {
+            map["crate"] = method.crate_name.clone().into();
+        }
+        map["name"] = method.name.clone().into();
+        map["size"] = method.size.into();
+
+        items.push(map).unwrap();
+    }
+
+    let mut root = json::JsonValue::new_object();
+    root["file-size"] = file_size.into();
+    root["text-section-size"] = text_size.into();
+    root["functions"] = items.into();
+
+    println!("{}", root.dump());
+}
+
+struct Crates {
+    filter_out_size: u64,
+    filter_out_len: usize,
+    crates: Vec<Crate>,
+}
+
+struct Crate {
+    name: String,
+    size: u64,
+}
+
+fn filter_crates(d: &mut CrateData, args: &Args) -> Crates {
+    let mut crates = Vec::new();
+
     let dd = &d.data;
     let mut sizes = HashMap::new();
 
@@ -922,79 +1022,116 @@ fn print_crates(d: CrateData, args: &Args, table: &mut Table) {
     let mut list: Vec<(&String, &u64)> = sizes.iter().collect();
     list.sort_by_key(|v| v.1);
 
-    fn push_row(table: &mut Table, percent_file: f64, percent_text: f64, size: u64,
-                time: Option<String>, name: String)
-    {
-        let percent_file_s = format_percent(percent_file);
-        let percent_text_s = format_percent(percent_text);
-        let size_s = format_size(size);
-
-        match time {
-            Some(time) => {
-                table.push(&[percent_file_s, percent_text_s, size_s, time, name]);
-            }
-            None => {
-                table.push(&[percent_file_s, percent_text_s, size_s, name]);
-            }
-        }
-    }
-
     let n = if args.n == 0 { list.len() } else { args.n };
     for &(k, v) in list.iter().rev().take(n) {
-        let percent_file = *v as f64 / dd.file_size as f64 * 100.0;
-        let percent_text = *v as f64 / dd.text_size as f64 * 100.0;
-
-        let time = if args.time {
-            Some(match d.times.iter().find(|e| e.crate_name == *k) {
-                Some(elapsed) => format_time(elapsed.time),
-                None => "-".to_string(),
-            })
-        } else {
-            None
-        };
-
-        push_row(table, percent_file, percent_text, *v, time, k.clone());
+        crates.push(Crate {
+            name: k.clone(),
+            size: *v,
+        });
     }
 
+    let mut filter_out_size = 0;
     if n < list.len() {
-        let mut other_total = 0;
         for &(_, v) in list.iter().rev().skip(n) {
-            other_total += *v;
+            filter_out_size += *v;
         }
-
-        let time = if args.time {
-            Some(String::new())
-        } else {
-            None
-        };
-
-        let percent_file_s = other_total as f64 / dd.file_size as f64 * 100.0;
-        let percent_text_s = other_total as f64 / dd.text_size as f64 * 100.0;
-
-        let name = format!("And {} more crates. Use -n N to show more.", list.len() - n);
-        push_row(table, percent_file_s, percent_text_s, other_total, time, name);
     }
 
-    {
-        let time = if args.time {
-            Some(String::new())
-        } else {
-            None
-        };
-
-        let percent_file = dd.text_size as f64 / dd.file_size as f64 * 100.0;
-        let name = format!(".text section size, the file size is {}", format_size(dd.file_size));
-        push_row(table, percent_file, 100.0, dd.text_size, time, name);
+    Crates {
+        filter_out_size,
+        filter_out_len: list.len() - crates.len(),
+        crates: crates,
     }
 }
 
-fn print_times(d: CrateData, table: &mut Table) {
-    let mut times = d.times.clone();
+fn print_crates_table(crates: Crates, args: &Args, data: &Data) {
+    let mut table = Table::new(&["File", ".text", "Size", "Crate"]);
+
+    let term_width = if !args.wide {
+        term_size::dimensions().map(|v| v.0)
+    } else {
+        None
+    };
+    table.set_width(term_width);
+
+    for item in &crates.crates {
+        table.push(&[
+            format_percent(item.size as f64 / data.file_size as f64 * 100.0),
+            format_percent(item.size as f64 / data.text_size as f64 * 100.0),
+            format_size(item.size),
+            item.name.clone(),
+        ]);
+    }
+
+    if crates.filter_out_len != 0 {
+        table.push(&[
+            format_percent(crates.filter_out_size as f64 / data.file_size as f64 * 100.0),
+            format_percent(crates.filter_out_size as f64 / data.text_size as f64 * 100.0),
+            format_size(crates.filter_out_size),
+            format!("And {} more crates. Use -n N to show more.", crates.filter_out_len),
+        ]);
+    }
+
+    table.push(&[
+        format_percent(data.text_size as f64 / data.file_size as f64 * 100.0),
+        format_percent(100.0),
+        format_size(data.text_size),
+        format!(".text section size, the file size is {}", format_size(data.file_size)),
+    ]);
+
+    println!("{}", table);
+}
+
+fn print_crates_json(crates: &[Crate], text_size: u64, file_size: u64) {
+    let mut items = json::JsonValue::new_array();
+    for item in crates {
+        let mut map = json::JsonValue::new_object();
+        map["name"] = item.name.clone().into();
+        map["size"] = item.size.into();
+
+        items.push(map).unwrap();
+    }
+
+    let mut root = json::JsonValue::new_object();
+    root["file-size"] = file_size.into();
+    root["text-section-size"] = text_size.into();
+    root["crates"] = items.into();
+
+    println!("{}", root.dump());
+}
+
+fn print_times_table(mut times: Vec<Elapsed>, args: &Args) {
+    let mut table = Table::new(&["Time", "Crate"]);
+
+    let term_width = if !args.wide {
+        term_size::dimensions().map(|v| v.0)
+    } else {
+        None
+    };
+    table.set_width(term_width);
+
     times.sort_by(|a, b| b.time.cmp(&a.time));
 
     for time in times {
         table.push(&[format_time(time.time), time.crate_name]);
     }
+
+    println!("{}", table);
+}
+
+fn print_times_json(mut times: Vec<Elapsed>) {
+    times.sort_by(|a, b| b.time.cmp(&a.time));
+
+    let mut items = json::JsonValue::new_array();
+    for time in times {
+        let mut map = json::JsonValue::new_object();
+        map["crate"] = time.crate_name.clone().into();
+        map["time"] = format_time(time.time).into();
+
+        items.push(map).unwrap();
+    }
+
+    println!("{}", items.dump());
 }
 
 fn format_percent(n: f64) -> String {
