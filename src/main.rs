@@ -169,6 +169,9 @@ fn main() {
     if args.crates {
         let crates = filter_crates(&mut crate_data, &args);
         match args.message_format {
+            MessageFormat::TableAbsolute => {
+                print_crates_table_absolute(crates, &args, &crate_data.data);
+            }
             MessageFormat::Table => {
                 print_crates_table(crates, &args, &crate_data.data);
             }
@@ -178,7 +181,7 @@ fn main() {
         }
     } else if args.time {
         match args.message_format {
-            MessageFormat::Table => {
+            MessageFormat::Table | MessageFormat::TableAbsolute => {
                 print_times_table(crate_data.times, &args);
             }
             MessageFormat::Json => {
@@ -191,13 +194,18 @@ fn main() {
             MessageFormat::Table => {
                 print_methods_table(methods, &args, &crate_data.data);
             }
+            MessageFormat::TableAbsolute => {
+                print_methods_table_absolute(methods, &args, &crate_data.data);
+            }
             MessageFormat::Json => {
                 print_methods_json(&methods.methods, crate_data.data.text_size, crate_data.data.file_size);
             }
         }
     }
 
-    if args.message_format == MessageFormat::Table {
+    if args.message_format == MessageFormat::Table 
+        || args.message_format == MessageFormat::TableAbsolute
+    {
         if args.crates {
             println!();
             println!("Note: numbers above are a result of guesswork. \
@@ -239,17 +247,19 @@ OPTIONS:
         --full-fn                   Print full function name with hash values
     -n <NUM>                        Number of lines to show, 0 to show all [default: 20]
     -w, --wide                      Do not trim long function names
-        --message-format <FMT>      Output format [default: table] [possible values: table, json]
+        --message-format <FMT>      Output format [default: table] [possible values: tableabsolute, table, json]
 ";
 
 #[derive(Clone, Copy, PartialEq)]
 enum MessageFormat {
+    TableAbsolute,
     Table,
     Json,
 }
 
 fn parse_message_format(s: &str) -> Result<MessageFormat, &'static str> {
     match s {
+        "tableabsolute" => Ok(MessageFormat::TableAbsolute),
         "table" => Ok(MessageFormat::Table),
         "json" => Ok(MessageFormat::Json),
         _ => Err("invalid message format"),
@@ -907,6 +917,57 @@ fn filter_methods(d: &mut CrateData, args: &Args) -> Methods {
     }
 }
 
+fn print_methods_table_absolute (methods: Methods, args: &Args, data: &Data) {
+    let mut table = Table::new(&["Size", "Crate", "Name"]);
+
+    let term_width = if !args.wide {
+        term_size::dimensions().map(|v| v.0)
+    } else {
+        None
+    };
+    table.set_width(term_width);
+
+    for method in &methods.methods {
+        table.push(&[
+            format_size(method.size),
+            method.crate_name.clone(),
+            method.name.clone(),
+        ]);
+    }
+
+    {
+        let others_count = if methods.has_filter {
+            methods.filter_out_len - methods.methods.len()
+        } else {
+            data.symbols.len() - methods.methods.len()
+        };
+
+        table.push(&[
+            format_size(methods.filter_out_size),
+            String::new(),
+            format!("And {} smaller methods. Use -n N to show more.", others_count),
+        ]);
+    }
+
+    if methods.has_filter {
+        let total = methods.methods.iter().fold(0u64, |s, m| s + m.size) + methods.filter_out_size;
+
+        table.push(&[
+            format_size(total),
+            String::new(),
+            format!("filtered data size, the file size is {}", format_size(data.file_size)),
+        ]);
+    } else {
+        table.push(&[
+            format_size(data.text_size),
+            String::new(),
+            format!(".text section size, the file size is {}", format_size(data.file_size)),
+        ]);
+    }
+
+    println!("{}", table);
+}
+
 fn print_methods_table(methods: Methods, args: &Args, data: &Data) {
     let mut table = Table::new(&["File", ".text", "Size", "Crate", "Name"]);
 
@@ -1037,6 +1098,38 @@ fn filter_crates(d: &mut CrateData, args: &Args) -> Crates {
         filter_out_len: list.len() - crates.len(),
         crates: crates,
     }
+}
+
+fn print_crates_table_absolute(crates: Crates, args: &Args, data: &Data) {
+    let mut table = Table::new(&["Size", "Crate"]);
+
+    let term_width = if !args.wide {
+        term_size::dimensions().map(|v| v.0)
+    } else {
+        None
+    };
+    table.set_width(term_width);
+
+    for item in &crates.crates {
+        table.push(&[
+            format_size(item.size),
+            item.name.clone(),
+        ]);
+    }
+
+    if crates.filter_out_len != 0 {
+        table.push(&[
+            format_size(crates.filter_out_size),
+            format!("And {} more crates. Use -n N to show more.", crates.filter_out_len),
+        ]);
+    }
+
+    table.push(&[
+        format_size(data.text_size),
+        format!(".text section size, the file size is {}", format_size(data.file_size)),
+    ]);
+
+    println!("{}", table);
 }
 
 fn print_crates_table(crates: Crates, args: &Args, data: &Data) {
