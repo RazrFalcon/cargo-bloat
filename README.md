@@ -95,6 +95,7 @@ Flags specific for the `cargo-bloat`:
     --time                     Per crate build time. Will run `cargo clean` first
     --filter <CRATE|REGEXP>    Filter functions by crate
     --split-std                Split the 'std' crate to original crates like core, alloc, etc.
+    --no-relative-size         Hide 'File' and '.text' columns
     --full-fn                  Print full function name with hash values
 -n <NUM>                       Number of lines to show, 0 to show all [default: 20]
 -w, --wide                     Do not trim long function names

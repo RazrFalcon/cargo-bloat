@@ -166,20 +166,31 @@ fn main() {
         eprintln!("Analyzing {}", path);
     }
 
+    let term_width = if !args.wide {
+        term_size::dimensions().map(|v| v.0)
+    } else {
+        None
+    };
+
     if args.crates {
         let crates = filter_crates(&mut crate_data, &args);
         match args.message_format {
             MessageFormat::Table => {
-                print_crates_table(crates, &args, &crate_data.data);
+                if args.no_relative_size {
+                    print_crates_table_no_relative(crates, &crate_data.data, term_width);
+                } else {
+                    print_crates_table(crates, &crate_data.data, term_width);
+                }
             }
             MessageFormat::Json => {
-                print_crates_json(&crates.crates, crate_data.data.text_size, crate_data.data.file_size);
+                print_crates_json(&crates.crates, crate_data.data.text_size,
+                                  crate_data.data.file_size);
             }
         }
     } else if args.time {
         match args.message_format {
             MessageFormat::Table => {
-                print_times_table(crate_data.times, &args);
+                print_times_table(crate_data.times, term_width);
             }
             MessageFormat::Json => {
                 print_times_json(crate_data.times);
@@ -189,19 +200,23 @@ fn main() {
         let methods = filter_methods(&mut crate_data, &args);
         match args.message_format {
             MessageFormat::Table => {
-                print_methods_table(methods, &args, &crate_data.data);
+                if args.no_relative_size {
+                    print_methods_table_no_relative(methods, &crate_data.data, term_width);
+                } else {
+                    print_methods_table(methods, &crate_data.data, term_width);
+                }
             }
             MessageFormat::Json => {
-                print_methods_json(&methods.methods, crate_data.data.text_size, crate_data.data.file_size);
+                print_methods_json(&methods.methods, crate_data.data.text_size,
+                                   crate_data.data.file_size);
             }
         }
     }
 
     if args.message_format == MessageFormat::Table {
         if args.crates {
-            println!();
             println!("Note: numbers above are a result of guesswork. \
-                   They are not 100% correct and never will be.");
+                      They are not 100% correct and never will be.");
         }
 
         if args.time && args.jobs != Some(1) {
@@ -236,6 +251,7 @@ OPTIONS:
         --time                      Per crate build time. Will run `cargo clean` first
         --filter <CRATE|REGEXP>     Filter functions by crate
         --split-std                 Split the 'std' crate to original crates like core, alloc, etc.
+        --no-relative-size          Hide 'File' and '.text' columns
         --full-fn                   Print full function name with hash values
     -n <NUM>                        Number of lines to show, 0 to show all [default: 20]
     -w, --wide                      Do not trim long function names
@@ -277,6 +293,7 @@ struct Args {
     time: bool,
     filter: Option<String>,
     split_std: bool,
+    no_relative_size: bool,
     full_fn: bool,
     n: usize,
     wide: bool,
@@ -305,6 +322,7 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
         time:                   input.contains("--time"),
         filter:                 input.value_from_str("--filter")?,
         split_std:              input.contains("--split-std"),
+        no_relative_size:       input.contains("--no-relative-size"),
         full_fn:                input.contains("--full-fn"),
         n:                      input.value_from_str("-n")?.unwrap_or(20),
         wide:                   input.contains(["-w", "--wide"]),
@@ -903,18 +921,12 @@ fn filter_methods(d: &mut CrateData, args: &Args) -> Methods {
         has_filter,
         filter_out_size,
         filter_out_len,
-        methods: methods,
+        methods,
     }
 }
 
-fn print_methods_table(methods: Methods, args: &Args, data: &Data) {
+fn print_methods_table(methods: Methods, data: &Data, term_width: Option<usize>) {
     let mut table = Table::new(&["File", ".text", "Size", "Crate", "Name"]);
-
-    let term_width = if !args.wide {
-        term_size::dimensions().map(|v| v.0)
-    } else {
-        None
-    };
     table.set_width(term_width);
 
     for method in &methods.methods {
@@ -963,7 +975,52 @@ fn print_methods_table(methods: Methods, args: &Args, data: &Data) {
         ]);
     }
 
-    println!("{}", table);
+    print!("{}", table);
+}
+
+fn print_methods_table_no_relative(methods: Methods, data: &Data, term_width: Option<usize>) {
+    let mut table = Table::new(&["Size", "Crate", "Name"]);
+    table.set_width(term_width);
+
+    for method in &methods.methods {
+        table.push(&[
+            format_size(method.size),
+            method.crate_name.clone(),
+            method.name.clone(),
+        ]);
+    }
+
+    {
+        let others_count = if methods.has_filter {
+            methods.filter_out_len - methods.methods.len()
+        } else {
+            data.symbols.len() - methods.methods.len()
+        };
+
+        table.push(&[
+            format_size(methods.filter_out_size),
+            String::new(),
+            format!("And {} smaller methods. Use -n N to show more.", others_count),
+        ]);
+    }
+
+    if methods.has_filter {
+        let total = methods.methods.iter().fold(0u64, |s, m| s + m.size) + methods.filter_out_size;
+
+        table.push(&[
+            format_size(total),
+            String::new(),
+            format!("filtered data size, the file size is {}", format_size(data.file_size)),
+        ]);
+    } else {
+        table.push(&[
+            format_size(data.text_size),
+            String::new(),
+            format!(".text section size, the file size is {}", format_size(data.file_size)),
+        ]);
+    }
+
+    print!("{}", table);
 }
 
 fn print_methods_json(methods: &[Method], text_size: u64, file_size: u64) {
@@ -1035,18 +1092,12 @@ fn filter_crates(d: &mut CrateData, args: &Args) -> Crates {
     Crates {
         filter_out_size,
         filter_out_len: list.len() - crates.len(),
-        crates: crates,
+        crates,
     }
 }
 
-fn print_crates_table(crates: Crates, args: &Args, data: &Data) {
+fn print_crates_table(crates: Crates, data: &Data, term_width: Option<usize>) {
     let mut table = Table::new(&["File", ".text", "Size", "Crate"]);
-
-    let term_width = if !args.wide {
-        term_size::dimensions().map(|v| v.0)
-    } else {
-        None
-    };
     table.set_width(term_width);
 
     for item in &crates.crates {
@@ -1074,7 +1125,33 @@ fn print_crates_table(crates: Crates, args: &Args, data: &Data) {
         format!(".text section size, the file size is {}", format_size(data.file_size)),
     ]);
 
-    println!("{}", table);
+    print!("{}", table);
+}
+
+fn print_crates_table_no_relative(crates: Crates, data: &Data, term_width: Option<usize>) {
+    let mut table = Table::new(&["Size", "Crate"]);
+    table.set_width(term_width);
+
+    for item in &crates.crates {
+        table.push(&[
+            format_size(item.size),
+            item.name.clone(),
+        ]);
+    }
+
+    if crates.filter_out_len != 0 {
+        table.push(&[
+            format_size(crates.filter_out_size),
+            format!("And {} more crates. Use -n N to show more.", crates.filter_out_len),
+        ]);
+    }
+
+    table.push(&[
+        format_size(data.text_size),
+        format!(".text section size, the file size is {}", format_size(data.file_size)),
+    ]);
+
+    print!("{}", table);
 }
 
 fn print_crates_json(crates: &[Crate], text_size: u64, file_size: u64) {
@@ -1095,14 +1172,8 @@ fn print_crates_json(crates: &[Crate], text_size: u64, file_size: u64) {
     println!("{}", root.dump());
 }
 
-fn print_times_table(mut times: Vec<Elapsed>, args: &Args) {
+fn print_times_table(mut times: Vec<Elapsed>, term_width: Option<usize>) {
     let mut table = Table::new(&["Time", "Crate"]);
-
-    let term_width = if !args.wide {
-        term_size::dimensions().map(|v| v.0)
-    } else {
-        None
-    };
     table.set_width(term_width);
 
     times.sort_by(|a, b| b.time.cmp(&a.time));
