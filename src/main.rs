@@ -163,7 +163,8 @@ fn main() {
     };
 
     if let Some(ref path) = crate_data.exe_path {
-        eprintln!("Analyzing {}", path);
+        eprintln!("    Analyzing {}", path);
+        eprintln!();
     }
 
     let term_width = if !args.wide {
@@ -215,11 +216,13 @@ fn main() {
 
     if args.message_format == MessageFormat::Table {
         if args.crates {
+            println!();
             println!("Note: numbers above are a result of guesswork. \
                       They are not 100% correct and never will be.");
         }
 
         if args.time && args.jobs != Some(1) {
+            println!();
             println!("Note: prefer using `-j 1` argument to disable a multithreaded build.");
         }
     }
@@ -475,9 +478,7 @@ fn get_workspace_root() -> Result<String, Error> {
 fn process_crate(args: &Args) -> Result<CrateData, Error> {
     let workspace_root = get_workspace_root()?;
 
-    eprintln!("Compiling ...");
-
-    let output = if args.time {
+    let mut child = if args.time {
         // To collect the build times we have to clean the repo first.
 
         let clean_args = if args.release {
@@ -497,21 +498,33 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
         Command::new("cargo")
             .args(&get_cargo_args(args))
             .env("RUSTC_WRAPPER", "cargo-bloat")
-            .output()
-            .map_err(|_| Error::CargoBuildFailed)?
+            .stdout(std::process::Stdio::piped())
+            // Hide cargo output, because we are using stderr to track build time.
+            .stderr(std::process::Stdio::piped())
+            .spawn().map_err(|_| Error::CargoBuildFailed)?
     } else {
         Command::new("cargo")
             .args(&get_cargo_args(args))
-            .output()
-            .map_err(|_| Error::CargoBuildFailed)?
+            .stdout(std::process::Stdio::piped())
+            .spawn().map_err(|_| Error::CargoBuildFailed)?
     };
 
-    if !output.status.success() {
+    if !child.wait().map_err(|_| Error::CargoBuildFailed)?.success() {
         return Err(Error::CargoBuildFailed);
     }
 
+    use std::io::Read;
+    let mut stdout = String::new();
+    if let Some(mut h) = child.stdout {
+        h.read_to_string(&mut stdout).unwrap();
+    }
+
+    let mut stderr = String::new();
+    if let Some(mut h) = child.stderr {
+        h.read_to_string(&mut stderr).unwrap();
+    }
+
     let mut artifacts = Vec::new();
-    let stdout = str::from_utf8(&output.stdout).unwrap();
     for line in stdout.lines() {
         let build = json::parse(line).map_err(|_| Error::InvalidCargoOutput)?;
         if let Some(target_name) = build["target"]["name"].as_str() {
@@ -540,7 +553,6 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
 
     let mut times = Vec::new();
     if args.time {
-        let stderr = str::from_utf8(&output.stderr).unwrap();
         for line in stderr.lines() {
             if !line.starts_with("json-time {") {
                 continue;
@@ -1182,7 +1194,7 @@ fn print_times_table(mut times: Vec<Elapsed>, term_width: Option<usize>) {
         table.push(&[format_time(time.time), time.crate_name]);
     }
 
-    println!("{}", table);
+    print!("{}", table);
 }
 
 fn print_times_json(mut times: Vec<Elapsed>) {
