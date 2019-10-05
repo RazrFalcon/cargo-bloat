@@ -15,7 +15,7 @@ struct Section {
     size: u64,
 }
 
-pub(crate) fn parse(data: &[u8]) -> Vec<SymbolData> {
+pub fn parse(data: &[u8]) -> Vec<SymbolData> {
     let mut s = Stream::new(data, ByteOrder::LittleEndian);
     s.skip::<u32>(); // magic
     s.skip::<u32>(); // cputype
@@ -135,7 +135,7 @@ fn parse_symbols(
     // To find symbol sizes, we have to sort them by address.
     raw_symbols.sort_by_key(|v| v.address);
 
-    // Add a __TEXT section end address, which will be used
+    // Add the __TEXT section end address, which will be used
     // to calculate the size of the last symbol.
     raw_symbols.push(RawSymbol {
         string_index: 0,

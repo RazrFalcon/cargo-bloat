@@ -13,11 +13,12 @@ mod elf32;
 mod elf64;
 mod macho;
 mod parser;
+mod pe;
 mod table;
 
 use crate::table::Table;
 
-struct SymbolData {
+pub struct SymbolData {
     name: demangle::SymbolName,
     size: u64,
 }
@@ -28,7 +29,7 @@ struct Data {
     text_size: u64,
 }
 
-struct CrateData {
+pub struct CrateData {
     exe_path: Option<String>,
     data: Data,
     std_crates: Vec<String>,
@@ -276,7 +277,7 @@ fn parse_message_format(s: &str) -> Result<MessageFormat, &'static str> {
 }
 
 
-struct Args {
+pub struct Args {
     help: bool,
     version: bool,
     bin: Option<String>,
@@ -478,7 +479,7 @@ fn get_workspace_root() -> Result<String, Error> {
 fn process_crate(args: &Args) -> Result<CrateData, Error> {
     let workspace_root = get_workspace_root()?;
 
-    let mut child = if args.time {
+    let child = if args.time {
         // To collect the build times we have to clean the repo first.
 
         let clean_args = if args.release {
@@ -509,20 +510,13 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
             .spawn().map_err(|_| Error::CargoBuildFailed)?
     };
 
-    if !child.wait().map_err(|_| Error::CargoBuildFailed)?.success() {
+    let output = child.wait_with_output().map_err(|_| Error::CargoBuildFailed)?;
+    if !output.status.success() {
         return Err(Error::CargoBuildFailed);
     }
 
-    use std::io::Read;
-    let mut stdout = String::new();
-    if let Some(mut h) = child.stdout {
-        h.read_to_string(&mut stdout).unwrap();
-    }
-
-    let mut stderr = String::new();
-    if let Some(mut h) = child.stderr {
-        h.read_to_string(&mut stderr).unwrap();
-    }
+    let stdout = str::from_utf8(&output.stdout).unwrap();
+    let stderr = str::from_utf8(&output.stderr).unwrap();
 
     let mut artifacts = Vec::new();
     for line in stdout.lines() {
@@ -763,19 +757,16 @@ fn collect_deps_symbols(
 }
 
 fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
-    let file = map_file(&path)?;
-    let data = &file;
+    let data = &map_file(&path)?;
 
-    match data.get(0..4) {
-        Some(b"\x7fELF") if data.len() >= 8 => {
-            collect_elf_data(path, data)
-        }
-        Some(&[0xCF, 0xFA, 0xED, 0xFE]) => {
-            collect_macho_data(path, data)
-        }
-        _ => {
-            Err(Error::UnsupportedFileFormat(path.to_owned()))
-        }
+    if data.starts_with(b"\x7fELF") && data.len() >= 8 {
+        collect_elf_data(path, data)
+    } else if data.starts_with(&[0xCF, 0xFA, 0xED, 0xFE]) {
+        collect_macho_data(path, data)
+    } else if data.starts_with(b"MZ") {
+        collect_pe_data(path, data)
+    } else {
+        Err(Error::UnsupportedFileFormat(path.to_owned()))
     }
 }
 
@@ -811,6 +802,25 @@ fn collect_elf_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
 
 fn collect_macho_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
     let symbols = macho::parse(data);
+    let total_size = symbols.iter().map(|s| s.size).sum();
+
+    let d = Data {
+        symbols,
+        file_size: fs::metadata(path).unwrap().len(),
+        text_size: total_size,
+    };
+
+    Ok(d)
+}
+
+fn collect_pe_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
+    let symbols = pe::parse(data);
+
+    // `pe::parse` will return zero symbols for an executable built with MSVC.
+    if symbols.is_empty() {
+        return Err(Error::UnsupportedFileFormat(path.to_owned()));
+    }
+
     let total_size = symbols.iter().map(|s| s.size).sum();
 
     let d = Data {

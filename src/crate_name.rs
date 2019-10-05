@@ -3,7 +3,7 @@ use crate::demangle::{self, SymbolName};
 
 pub const UNKNOWN: &str = "[Unknown]";
 
-pub(crate) fn from_sym(d: &CrateData, args: &Args, sym: &SymbolName) -> (String, bool) {
+pub fn from_sym(d: &CrateData, args: &Args, sym: &SymbolName) -> (String, bool) {
     let (mut name, is_exact) = from_sym_impl(d, sym);
 
     if !args.split_std {

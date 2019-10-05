@@ -15,7 +15,7 @@ mod section_type {
     pub const STRING_TABLE: super::elf::Word = 3;
 }
 
-pub(crate) fn parse(data: &[u8], byte_order: ByteOrder) -> Vec<SymbolData> {
+pub fn parse(data: &[u8], byte_order: ByteOrder) -> Vec<SymbolData> {
     let mut s = Stream::new(&data[16..], byte_order);
     s.skip::<elf::Half>(); // type
     s.skip::<elf::Half>(); // machine
