@@ -161,7 +161,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - When running on an unsupported OS you will get an error and not a random panic.
 - The table has a dynamic column width now.
 
-[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.8.4...HEAD
+[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.8.4...v0.9.0
 [0.8.4]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.8.1...v0.8.2
