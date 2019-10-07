@@ -20,8 +20,8 @@ pub fn parse(data: &[u8]) -> Vec<SymbolData> {
     s.skip::<u16>(); // machine
     let number_of_sections: u16 = s.read();
     s.skip::<u32>(); // time_date_stamp
-    let pointer_to_symbol_table: u32 = s.read();
-    let number_of_symbols: u32 = s.read();
+    let pointer_to_symbol_table = s.read::<u32>() as usize;
+    let number_of_symbols = s.read::<u32>() as usize;
     let size_of_optional_header: u16 = s.read();
     s.skip::<u16>(); // characteristics
 
@@ -48,7 +48,7 @@ pub fn parse(data: &[u8]) -> Vec<SymbolData> {
         }
     }
 
-    let mut symbols = Vec::with_capacity(number_of_symbols as usize);
+    let mut symbols = Vec::with_capacity(number_of_symbols);
 
     // Add the .text section size, which will be used
     // to calculate the size of the last symbol.
@@ -57,12 +57,9 @@ pub fn parse(data: &[u8]) -> Vec<SymbolData> {
         size: text_section_size as u64,
     });
 
-    let string_table_offset =
-        pointer_to_symbol_table as usize
-            + number_of_symbols as usize * COFF_SYMBOL_SIZE;
-
-    let mut s = Stream::new_at(data, pointer_to_symbol_table as usize, ByteOrder::LittleEndian);
-    let symbols_data = s.read_bytes(number_of_symbols as usize * COFF_SYMBOL_SIZE);
+    let mut s = Stream::new_at(data, pointer_to_symbol_table, ByteOrder::LittleEndian);
+    let symbols_data = s.read_bytes(number_of_symbols * COFF_SYMBOL_SIZE);
+    let string_table_offset = s.offset();
 
     let mut s = Stream::new(symbols_data, ByteOrder::LittleEndian);
     while !s.at_end() {
