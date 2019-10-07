@@ -818,6 +818,7 @@ fn collect_pe_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
 
     // `pe::parse` will return zero symbols for an executable built with MSVC.
     if symbols.is_empty() {
+        eprintln!("Warning: MSVC target is not supported.");
         return Err(Error::UnsupportedFileFormat(path.to_owned()));
     }
 
