@@ -4,7 +4,9 @@ Find out what takes most of the space in your executable.
 
 Inspired by [google/bloaty](https://github.com/google/bloaty).
 
-**Note:** supports ELF (Linux, BSD) and Mach-O (macOS) binaries only.
+**Note:** supports ELF (Linux, BSD), Mach-O (macOS) and PE (Windows) binaries.
+
+**Note:** Windows MSVC target is not supported. See [#17](https://github.com/RazrFalcon/cargo-bloat/issues/17).
 
 ### Install
 
