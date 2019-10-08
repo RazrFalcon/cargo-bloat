@@ -4,18 +4,19 @@ use crate::parser::*;
 const LC_SYMTAB: u32 = 0x2;
 const LC_SEGMENT_64: u32 = 0x19;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 struct Cmd {
     kind: u32,
     offset: usize,
 }
 
+#[derive(Clone, Copy)]
 struct Section {
     address: u64,
     size: u64,
 }
 
-pub fn parse(data: &[u8]) -> Vec<SymbolData> {
+pub fn parse(data: &[u8]) -> (Vec<SymbolData>, u64) {
     let mut s = Stream::new(data, ByteOrder::LittleEndian);
     s.skip::<u32>(); // magic
     s.skip::<u32>(); // cputype
@@ -91,10 +92,13 @@ pub fn parse(data: &[u8]) -> Vec<SymbolData> {
         };
 
         let symbols_data = &data[symbols_offset as usize..];
-        return parse_symbols(symbols_data, number_of_symbols, strings, text_section);
+        return (
+            parse_symbols(symbols_data, number_of_symbols, strings, text_section),
+            text_section.size,
+        );
     }
 
-    Vec::new()
+    (Vec::new(), 0)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -188,6 +192,7 @@ fn parse_symbols(
         if let Some(s) = parse_null_string(strings, sym.string_index as usize) {
             symbols.push(SymbolData {
                 name: crate::demangle::SymbolName::demangle(s),
+                address: sym.address,
                 size,
             });
         }

@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Changed
+- Use an actual `.text` section size instead of calculating it from symbols.
+- Remove duplicated methods that have equal address.
 
 ## [0.9.0] - 2019-10-07
 ### Added

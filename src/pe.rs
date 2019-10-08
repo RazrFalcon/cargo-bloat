@@ -11,7 +11,7 @@ const IMAGE_SYM_DTYPE_FUNCTION: u16 = 2;
 const SIZEOF_PE_MAGIC: usize = 4;
 const SIZEOF_COFF_HEADER: usize = 20;
 
-pub fn parse(data: &[u8]) -> Vec<SymbolData> {
+pub fn parse(data: &[u8]) -> (Vec<SymbolData>, u64) {
     let mut s = Stream::new_at(data, PE_POINTER_OFFSET, ByteOrder::LittleEndian);
     let pe_pointer = s.read::<u32>() as usize;
 
@@ -26,6 +26,7 @@ pub fn parse(data: &[u8]) -> Vec<SymbolData> {
     s.skip::<u16>(); // characteristics
 
     let mut text_section_size = 0;
+    let mut text_section_index = 0;
     {
         let sections_offset =
               pe_pointer
@@ -34,7 +35,7 @@ pub fn parse(data: &[u8]) -> Vec<SymbolData> {
             + size_of_optional_header as usize;
 
         let mut s = Stream::new_at(data, sections_offset, ByteOrder::LittleEndian);
-        for _ in 0..number_of_sections {
+        for i in 0..number_of_sections {
             let name = s.read_bytes(8);
             s.skip_len(8); // virtual_size + virtual_address
             let size_of_raw_data: u32 = s.read();
@@ -43,6 +44,7 @@ pub fn parse(data: &[u8]) -> Vec<SymbolData> {
             let len = name.iter().position(|c| *c == 0).unwrap_or(8);
             if std::str::from_utf8(&name[0..len]) == Ok(".text") {
                 text_section_size = size_of_raw_data;
+                text_section_index = i;
                 break;
             }
         }
@@ -54,7 +56,8 @@ pub fn parse(data: &[u8]) -> Vec<SymbolData> {
     // to calculate the size of the last symbol.
     symbols.push(SymbolData {
         name: crate::demangle::SymbolName::demangle(".text"),
-        size: text_section_size as u64,
+        address: text_section_size as u64,
+        size: 0,
     });
 
     let mut s = Stream::new_at(data, pointer_to_symbol_table, ByteOrder::LittleEndian);
@@ -79,7 +82,8 @@ pub fn parse(data: &[u8]) -> Vec<SymbolData> {
             continue;
         }
 
-        if section_number == 0 {
+        // `section_number` starts from 1.
+        if section_number - 1 != text_section_index as i16 {
             continue;
         }
 
@@ -95,28 +99,28 @@ pub fn parse(data: &[u8]) -> Vec<SymbolData> {
         if let Some(s) = name {
             symbols.push(SymbolData {
                 name: crate::demangle::SymbolName::demangle(s),
-                // At this point size represents a symbol address.
-                size: value as u64,
+                address: value as u64,
+                size: 0,
             });
         }
     }
 
     // To find symbol sizes, we have to sort them by address.
-    symbols.sort_by_key(|v| v.size);
+    symbols.sort_by_key(|v| v.address);
 
     // PE format doesn't store the symbols size,
     // so we have to calculate it by subtracting an address of the next symbol
     // from the current.
     for i in 1..symbols.len() {
-        let curr = symbols[i].size;
-        let next_sym = symbols[i..].iter().skip_while(|s| s.size == curr).next();
+        let curr = symbols[i].address;
+        let next_sym = symbols[i..].iter().skip_while(|s| s.address == curr).next();
         if let Some(next_sym) = next_sym {
-            symbols[i].size = next_sym.size - curr;
+            symbols[i].size = next_sym.address - curr;
         }
     }
 
     // Remove the last symbol, which is `.text` section size.
     symbols.pop();
 
-    symbols
+    (symbols, text_section_size as u64)
 }

@@ -20,6 +20,7 @@ use crate::table::Table;
 
 pub struct SymbolData {
     name: demangle::SymbolName,
+    address: u64,
     size: u64,
 }
 
@@ -759,78 +760,83 @@ fn collect_deps_symbols(
 fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
     let data = &map_file(&path)?;
 
-    if data.starts_with(b"\x7fELF") && data.len() >= 8 {
-        collect_elf_data(path, data)
+    let d = if data.starts_with(b"\x7fELF") && data.len() >= 8 {
+        collect_elf_data(data)
     } else if data.starts_with(&[0xCF, 0xFA, 0xED, 0xFE]) {
-        collect_macho_data(path, data)
+        collect_macho_data(data)
     } else if data.starts_with(b"MZ") {
-        collect_pe_data(path, data)
+        collect_pe_data(data)
     } else {
-        Err(Error::UnsupportedFileFormat(path.to_owned()))
-    }
+        None
+    };
+
+    let mut d = d.ok_or_else(|| Error::UnsupportedFileFormat(path.to_owned()))?;
+
+    // Multiple symbols may point to the same address.
+    // Remove duplicates.
+    d.symbols.sort_by_key(|v| v.address);
+    d.symbols.dedup_by_key(|v| v.address);
+
+    d.file_size = fs::metadata(path).unwrap().len();
+
+    Ok(d)
 }
 
-fn collect_elf_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
+fn collect_elf_data(data: &[u8]) -> Option<Data> {
     let is_64_bit = match data[4] {
         1 => false,
         2 => true,
-        _ => return Err(Error::UnsupportedFileFormat(path.to_owned())),
+        _ => return None,
     };
 
     let byte_order = match data[5] {
         1 => parser::ByteOrder::LittleEndian,
         2 => parser::ByteOrder::BigEndian,
-        _ => return Err(Error::UnsupportedFileFormat(path.to_owned())),
+        _ => return None,
     };
 
-    let symbols = if is_64_bit {
+    let (symbols, text_size) = if is_64_bit {
         elf64::parse(data, byte_order)
     } else {
         elf32::parse(data, byte_order)
     };
 
-    let total_size = symbols.iter().map(|s| s.size).sum();
-
     let d = Data {
         symbols,
-        file_size: fs::metadata(path).unwrap().len(),
-        text_size: total_size,
+        file_size: 0,
+        text_size,
     };
 
-    Ok(d)
+    Some(d)
 }
 
-fn collect_macho_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
-    let symbols = macho::parse(data);
-    let total_size = symbols.iter().map(|s| s.size).sum();
-
+fn collect_macho_data(data: &[u8]) -> Option<Data> {
+    let (symbols, text_size) = macho::parse(data);
     let d = Data {
         symbols,
-        file_size: fs::metadata(path).unwrap().len(),
-        text_size: total_size,
+        file_size: 0,
+        text_size,
     };
 
-    Ok(d)
+    Some(d)
 }
 
-fn collect_pe_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
-    let symbols = pe::parse(data);
+fn collect_pe_data(data: &[u8]) -> Option<Data> {
+    let (symbols, text_size) = pe::parse(data);
 
     // `pe::parse` will return zero symbols for an executable built with MSVC.
     if symbols.is_empty() {
         eprintln!("Warning: MSVC target is not supported.");
-        return Err(Error::UnsupportedFileFormat(path.to_owned()));
+        return None;
     }
-
-    let total_size = symbols.iter().map(|s| s.size).sum();
 
     let d = Data {
         symbols,
-        file_size: fs::metadata(path).unwrap().len(),
-        text_size: total_size,
+        file_size: 0,
+        text_size,
     };
 
-    Ok(d)
+    Some(d)
 }
 
 struct Methods {
