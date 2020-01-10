@@ -302,6 +302,8 @@ pub struct Args {
     full_fn: bool,
     n: usize,
     wide: bool,
+    verbose: bool,
+    manifest_path: Option<String>,
     message_format: MessageFormat,
 }
 
@@ -331,6 +333,8 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
         full_fn:                input.contains("--full-fn"),
         n:                      input.value_from_str("-n")?.unwrap_or(20),
         wide:                   input.contains(["-w", "--wide"]),
+        verbose:                input.contains(["-v", "--verbose"]),
+        manifest_path:          input.value_from_str("--manifest-path")?,
         message_format:         input.value_from_fn("--message-format", parse_message_format)?
                                      .unwrap_or(MessageFormat::Table),
     };
@@ -682,6 +686,14 @@ fn get_cargo_args(args: &Args) -> Vec<String> {
         if let Some(ref features) = args.features {
             list.push(format!("--features={}", features));
         }
+    }
+
+    if let Some(ref path) = args.manifest_path {
+        list.push(format!("--manifest-path={}", path))
+    }
+
+    if args.verbose {
+        list.push("-v".into());
     }
 
     if let Some(ref target) = args.target {
