@@ -1,5 +1,6 @@
 use std::{fs, fmt, path, str};
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::process::{self, Command};
 
 use multimap::MultiMap;
@@ -312,30 +313,30 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
     let args = Args {
         help:                   input.contains(["-h", "--help"]),
         version:                input.contains(["-V", "--version"]),
-        bin:                    input.value_from_str("--bin")?,
-        example:                input.value_from_str("--example")?,
-        test:                   input.value_from_str("--test")?,
-        package:                input.value_from_str(["-p", "--package"])?,
+        bin:                    input.opt_value_from_str("--bin")?,
+        example:                input.opt_value_from_str("--example")?,
+        test:                   input.opt_value_from_str("--test")?,
+        package:                input.opt_value_from_str(["-p", "--package"])?,
         release:                input.contains("--release"),
-        jobs:                   input.value_from_str(["-j", "--jobs"])?,
-        features:               input.value_from_str("--features")?,
+        jobs:                   input.opt_value_from_str(["-j", "--jobs"])?,
+        features:               input.opt_value_from_str("--features")?,
         all_features:           input.contains("--all-features"),
         no_default_features:    input.contains("--no-default-features"),
-        target:                 input.value_from_str("--target")?,
-        target_dir:             input.value_from_str("--target-dir")?,
+        target:                 input.opt_value_from_str("--target")?,
+        target_dir:             input.opt_value_from_str("--target-dir")?,
         frozen:                 input.contains("--frozen"),
         locked:                 input.contains("--locked"),
         crates:                 input.contains("--crates"),
         time:                   input.contains("--time"),
-        filter:                 input.value_from_str("--filter")?,
+        filter:                 input.opt_value_from_str("--filter")?,
         split_std:              input.contains("--split-std"),
         no_relative_size:       input.contains("--no-relative-size"),
         full_fn:                input.contains("--full-fn"),
-        n:                      input.value_from_str("-n")?.unwrap_or(20),
+        n:                      input.opt_value_from_str("-n")?.unwrap_or(20),
         wide:                   input.contains(["-w", "--wide"]),
         verbose:                input.contains(["-v", "--verbose"]),
-        manifest_path:          input.value_from_str("--manifest-path")?,
-        message_format:         input.value_from_fn("--message-format", parse_message_format)?
+        manifest_path:          input.opt_value_from_str("--manifest-path")?,
+        message_format:         input.opt_value_from_fn("--message-format", parse_message_format)?
                                      .unwrap_or(MessageFormat::Table),
     };
 
@@ -345,14 +346,14 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
 }
 
 fn wrapper_mode(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    let start = time::precise_time_ns();
+    let start = std::time::Instant::now();
 
     Command::new(&args[1])
         .args(&args[2..])
         .status()
         .map_err(|_| Error::CargoBuildFailed)?;
 
-    let end = time::precise_time_ns();
+    let time_ns: u64 = start.elapsed().as_nanos().try_into()?;
 
     let mut crate_name = String::new();
     for (i, arg) in args.iter().enumerate() {
@@ -401,7 +402,7 @@ fn wrapper_mode(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     // `cargo` will ignore raw JSON, so we have to use a prefix
     eprintln!("json-time {}", object!{
         "crate_name" => crate_name,
-        "time" => end - start,
+        "time" => time_ns,
         "build_script" => build_script
     }.dump());
 
