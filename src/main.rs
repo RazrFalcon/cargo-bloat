@@ -745,9 +745,9 @@ fn collect_rlib_paths(deps_dir: &path::Path) -> Vec<(String, path::PathBuf)> {
     rlib_paths
 }
 
-fn map_file(path: &path::Path) -> Result<memmap::Mmap, Error> {
+fn map_file(path: &path::Path) -> Result<memmap2::Mmap, Error> {
     let file = fs::File::open(path).map_err(|_| Error::OpenFailed(path.to_owned()))?;
-    let file = unsafe { memmap::Mmap::map(&file).map_err(|_| Error::OpenFailed(path.to_owned()))? };
+    let file = unsafe { memmap2::Mmap::map(&file).map_err(|_| Error::OpenFailed(path.to_owned()))? };
     Ok(file)
 }
 
