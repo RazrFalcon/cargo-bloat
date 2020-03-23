@@ -91,7 +91,7 @@ File .text    Size Crate Name
 0.5%  3.6% 13.5KiB       filtered data size, the file size is 2.8MiB
 ```
 
-Flags specific for the `cargo-bloat`:
+Flags specific for `cargo-bloat`:
 ```
     --crates                   Per crate bloatedness
     --time                     Per crate build time. Will run `cargo clean` first
@@ -106,4 +106,4 @@ Flags specific for the `cargo-bloat`:
 
 ### License
 
-*cargo-bloat* is licensed under the MIT.
+*cargo-bloat* is licensed under the MIT license.
