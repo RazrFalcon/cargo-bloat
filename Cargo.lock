@@ -2,7 +2,7 @@
 # It is not intended for manual editing.
 [[package]]
 name = "cargo-bloat"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "json 0.12.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "memmap2 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
