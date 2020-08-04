@@ -7,23 +7,18 @@ use multimap::MultiMap;
 
 use json::object;
 
-mod ar;
+use kuduk::ar;
+use kuduk::ByteOrder;
+use kuduk::demangle::SymbolData;
+use kuduk::elf32;
+use kuduk::elf64;
+use kuduk::macho;
+use kuduk::pe;
+
 mod crate_name;
-mod demangle;
-mod elf32;
-mod elf64;
-mod macho;
-mod parser;
-mod pe;
 mod table;
 
 use crate::table::Table;
-
-pub struct SymbolData {
-    name: demangle::SymbolName,
-    address: u64,
-    size: u64,
-}
 
 struct Data {
     symbols: Vec<SymbolData>,
@@ -803,8 +798,8 @@ fn collect_elf_data(data: &[u8]) -> Option<Data> {
     };
 
     let byte_order = match data[5] {
-        1 => parser::ByteOrder::LittleEndian,
-        2 => parser::ByteOrder::BigEndian,
+        1 => ByteOrder::LittleEndian,
+        2 => ByteOrder::BigEndian,
         _ => return None,
     };
 
