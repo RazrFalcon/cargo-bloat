@@ -804,7 +804,7 @@ fn collect_elf_data(data: &[u8]) -> Option<Data> {
     };
 
     let (symbols, text_size) = if is_64_bit {
-        elf64::parse(data, byte_order).symbols()
+        elf64::parse(data, byte_order).unwrap().symbols()
     } else {
         elf32::parse(data, byte_order)
     };
