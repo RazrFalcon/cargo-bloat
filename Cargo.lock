@@ -30,13 +30,6 @@ dependencies = [
 [[package]]
 name = "kuduk"
 version = "0.9.3"
-dependencies = [
- "json 0.12.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "memmap2 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "multimap 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "pico-args 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "term_size 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
 
 [[package]]
 name = "libc"
