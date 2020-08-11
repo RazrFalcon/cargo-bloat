@@ -7,13 +7,13 @@ use multimap::MultiMap;
 
 use json::object;
 
-use kuduk::ar;
-use kuduk::ByteOrder;
-use kuduk::demangle::SymbolData;
-use kuduk::elf32;
-use kuduk::elf64;
-use kuduk::macho;
-use kuduk::pe;
+use binfarce::ar;
+use binfarce::ByteOrder;
+use binfarce::demangle::SymbolData;
+use binfarce::elf32;
+use binfarce::elf64;
+use binfarce::macho;
+use binfarce::pe;
 
 mod crate_name;
 mod table;
