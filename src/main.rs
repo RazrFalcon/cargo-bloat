@@ -819,7 +819,7 @@ fn collect_elf_data(data: &[u8]) -> Option<Data> {
 }
 
 fn collect_macho_data(data: &[u8]) -> Option<Data> {
-    let (symbols, text_size) = macho::parse(data);
+    let (symbols, text_size) = macho::parse(data).unwrap().symbols();
     let d = Data {
         symbols,
         file_size: 0,
