@@ -830,7 +830,7 @@ fn collect_macho_data(data: &[u8]) -> Option<Data> {
 }
 
 fn collect_pe_data(data: &[u8]) -> Option<Data> {
-    let (symbols, text_size) = pe::parse(data);
+    let (symbols, text_size) = pe::parse(data).unwrap().symbols();
 
     // `pe::parse` will return zero symbols for an executable built with MSVC.
     if symbols.is_empty() {
