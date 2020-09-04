@@ -804,9 +804,9 @@ fn collect_elf_data(data: &[u8]) -> Option<Data> {
     };
 
     let (symbols, text_size) = if is_64_bit {
-        elf64::parse(data, byte_order).unwrap().symbols()
+        elf64::parse(data, byte_order).unwrap().symbols().unwrap()
     } else {
-        elf32::parse(data, byte_order).unwrap().symbols()
+        elf32::parse(data, byte_order).unwrap().symbols().unwrap()
     };
 
     let d = Data {
@@ -819,7 +819,7 @@ fn collect_elf_data(data: &[u8]) -> Option<Data> {
 }
 
 fn collect_macho_data(data: &[u8]) -> Option<Data> {
-    let (symbols, text_size) = macho::parse(data).unwrap().symbols();
+    let (symbols, text_size) = macho::parse(data).unwrap().symbols().unwrap();
     let d = Data {
         symbols,
         file_size: 0,
@@ -830,7 +830,7 @@ fn collect_macho_data(data: &[u8]) -> Option<Data> {
 }
 
 fn collect_pe_data(data: &[u8]) -> Option<Data> {
-    let (symbols, text_size) = pe::parse(data).unwrap().symbols();
+    let (symbols, text_size) = pe::parse(data).unwrap().symbols().unwrap();
 
     // `pe::parse` will return zero symbols for an executable built with MSVC.
     if symbols.is_empty() {
