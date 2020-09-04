@@ -753,7 +753,7 @@ fn collect_deps_symbols(
 
     for (name, path) in libs {
         let file = map_file(&path)?;
-        for sym in ar::parse(&file) {
+        for sym in ar::parse(&file).unwrap() {
             map.insert(sym, name.clone());
         }
     }
