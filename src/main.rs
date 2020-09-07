@@ -9,6 +9,7 @@ use json::object;
 
 use binfarce::ar;
 use binfarce::ByteOrder;
+use binfarce::Format;
 use binfarce::demangle::SymbolData;
 use binfarce::elf32;
 use binfarce::elf64;
@@ -768,14 +769,12 @@ fn collect_deps_symbols(
 fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
     let data = &map_file(&path)?;
 
-    let d = if data.starts_with(b"\x7fELF") && data.len() >= 8 {
-        collect_elf_data(data)
-    } else if data.starts_with(&[0xCF, 0xFA, 0xED, 0xFE]) {
-        collect_macho_data(data)
-    } else if data.starts_with(b"MZ") {
-        collect_pe_data(data)
-    } else {
-        None
+    let d = match binfarce::detect_format(&data) {
+        Format::Elf32 { byte_order: _ } => collect_elf_data(data),
+        Format::Elf64 { byte_order: _ } => collect_elf_data(data),
+        Format::Macho => collect_macho_data(data),
+        Format::PE => collect_pe_data(data),
+        Format::Unknown => None,
     };
 
     let mut d = d.ok_or_else(|| Error::UnsupportedFileFormat(path.to_owned()))?;
