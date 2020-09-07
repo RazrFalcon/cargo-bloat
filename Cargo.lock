@@ -2,13 +2,13 @@
 # It is not intended for manual editing.
 [[package]]
 name = "binfarce"
-version = "0.0.1"
+version = "0.1.1"
 
 [[package]]
 name = "cargo-bloat"
 version = "0.9.3"
 dependencies = [
- "binfarce 0.0.1",
+ "binfarce 0.1.1",
  "json 0.12.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "memmap2 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "multimap 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
