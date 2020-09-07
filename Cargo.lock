@@ -3,12 +3,13 @@
 [[package]]
 name = "binfarce"
 version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "cargo-bloat"
 version = "0.9.3"
 dependencies = [
- "binfarce 0.1.1",
+ "binfarce 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "json 0.12.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "memmap2 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "multimap 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -88,6 +89,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [metadata]
+"checksum binfarce 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "a38621e97d39a12b5927c1064582ffa318bac04c5f50f7886aca98971f52c711"
 "checksum json 0.12.4 (registry+https://github.com/rust-lang/crates.io-index)" = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum libc 0.2.68 (registry+https://github.com/rust-lang/crates.io-index)" = "dea0c0405123bba743ee3f91f49b1c7cfb684eef0da0a50110f758ccf24cdff0"
