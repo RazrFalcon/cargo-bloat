@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2020-09-08
+### Changed
+- The binary parsing code has been moved to the
+  [binfarce](https://github.com/Shnatsel/binfarce) crate
+  thanks to [@Shnatsel](https://github.com/Shnatsel).
+
 ## [0.9.3] - 2020-04-06
 ### Changed
 - Update dependencies.
@@ -174,7 +180,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - When running on an unsupported OS you will get an error and not a random panic.
 - The table has a dynamic column width now.
 
-[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.9.0...v0.9.1
