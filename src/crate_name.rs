@@ -1,5 +1,5 @@
 use crate::{CrateData, Args};
-use crate::demangle::{self, SymbolName};
+use binfarce::demangle::{self, SymbolName};
 
 pub const UNKNOWN: &str = "[Unknown]";
 

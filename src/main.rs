@@ -7,23 +7,19 @@ use multimap::MultiMap;
 
 use json::object;
 
-mod ar;
+use binfarce::ar;
+use binfarce::ByteOrder;
+use binfarce::Format;
+use binfarce::demangle::SymbolData;
+use binfarce::elf32;
+use binfarce::elf64;
+use binfarce::macho;
+use binfarce::pe;
+
 mod crate_name;
-mod demangle;
-mod elf32;
-mod elf64;
-mod macho;
-mod parser;
-mod pe;
 mod table;
 
 use crate::table::Table;
-
-pub struct SymbolData {
-    name: demangle::SymbolName,
-    address: u64,
-    size: u64,
-}
 
 struct Data {
     symbols: Vec<SymbolData>,
@@ -758,7 +754,7 @@ fn collect_deps_symbols(
 
     for (name, path) in libs {
         let file = map_file(&path)?;
-        for sym in ar::parse(&file) {
+        for sym in ar::parse(&file).unwrap() {
             map.insert(sym, name.clone());
         }
     }
@@ -773,14 +769,12 @@ fn collect_deps_symbols(
 fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
     let data = &map_file(&path)?;
 
-    let d = if data.starts_with(b"\x7fELF") && data.len() >= 8 {
-        collect_elf_data(data)
-    } else if data.starts_with(&[0xCF, 0xFA, 0xED, 0xFE]) {
-        collect_macho_data(data)
-    } else if data.starts_with(b"MZ") {
-        collect_pe_data(data)
-    } else {
-        None
+    let d = match binfarce::detect_format(&data) {
+        Format::Elf32 { byte_order: _ } => collect_elf_data(data),
+        Format::Elf64 { byte_order: _ } => collect_elf_data(data),
+        Format::Macho => collect_macho_data(data),
+        Format::PE => collect_pe_data(data),
+        Format::Unknown => None,
     };
 
     let mut d = d.ok_or_else(|| Error::UnsupportedFileFormat(path.to_owned()))?;
@@ -803,15 +797,15 @@ fn collect_elf_data(data: &[u8]) -> Option<Data> {
     };
 
     let byte_order = match data[5] {
-        1 => parser::ByteOrder::LittleEndian,
-        2 => parser::ByteOrder::BigEndian,
+        1 => ByteOrder::LittleEndian,
+        2 => ByteOrder::BigEndian,
         _ => return None,
     };
 
     let (symbols, text_size) = if is_64_bit {
-        elf64::parse(data, byte_order)
+        elf64::parse(data, byte_order).unwrap().symbols().unwrap()
     } else {
-        elf32::parse(data, byte_order)
+        elf32::parse(data, byte_order).unwrap().symbols().unwrap()
     };
 
     let d = Data {
@@ -824,7 +818,7 @@ fn collect_elf_data(data: &[u8]) -> Option<Data> {
 }
 
 fn collect_macho_data(data: &[u8]) -> Option<Data> {
-    let (symbols, text_size) = macho::parse(data);
+    let (symbols, text_size) = macho::parse(data).unwrap().symbols().unwrap();
     let d = Data {
         symbols,
         file_size: 0,
@@ -835,7 +829,7 @@ fn collect_macho_data(data: &[u8]) -> Option<Data> {
 }
 
 fn collect_pe_data(data: &[u8]) -> Option<Data> {
-    let (symbols, text_size) = pe::parse(data);
+    let (symbols, text_size) = pe::parse(data).unwrap().symbols().unwrap();
 
     // `pe::parse` will return zero symbols for an executable built with MSVC.
     if symbols.is_empty() {
