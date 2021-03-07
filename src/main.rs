@@ -247,6 +247,7 @@ OPTIONS:
         --no-default-features       Do not activate the `default` feature
         --target <TARGET>           Build for the target triple
         --target-dir <DIRECTORY>    Directory for all generated artifacts
+        --rustlib-target            Build for the rustlib target if you use custom target (JSON)
         --frozen                    Require Cargo.lock and cache are up to date
         --locked                    Require Cargo.lock is up to date
         --crates                    Per crate bloatedness
@@ -258,6 +259,7 @@ OPTIONS:
     -n <NUM>                        Number of lines to show, 0 to show all [default: 20]
     -w, --wide                      Do not trim long function names
         --message-format <FMT>      Output format [default: table] [possible values: table, json]
+    -Z <FLAG>...                    Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
 ";
 
 #[derive(Clone, Copy, PartialEq)]
@@ -281,6 +283,7 @@ pub struct Args {
     bin: Option<String>,
     example: Option<String>,
     test: Option<String>,
+    z: Option<String>,
     package: Option<String>,
     release: bool,
     jobs: Option<u32>,
@@ -289,6 +292,7 @@ pub struct Args {
     no_default_features: bool,
     target: Option<String>,
     target_dir: Option<String>,
+    rustlib_target: Option<String>,
     frozen: bool,
     locked: bool,
     crates: bool,
@@ -312,6 +316,7 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
         bin:                    input.opt_value_from_str("--bin")?,
         example:                input.opt_value_from_str("--example")?,
         test:                   input.opt_value_from_str("--test")?,
+        z:                      input.opt_value_from_str("-Z")?,
         package:                input.opt_value_from_str(["-p", "--package"])?,
         release:                input.contains("--release"),
         jobs:                   input.opt_value_from_str(["-j", "--jobs"])?,
@@ -320,6 +325,7 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
         no_default_features:    input.contains("--no-default-features"),
         target:                 input.opt_value_from_str("--target")?,
         target_dir:             input.opt_value_from_str("--target-dir")?,
+        rustlib_target:         input.opt_value_from_str("--rustlib-target")?,
         frozen:                 input.contains("--frozen"),
         locked:                 input.contains("--locked"),
         crates:                 input.contains("--crates"),
@@ -597,8 +603,9 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
 
     let default_target = get_default_target()?;
     let target_triple = args.target.clone().unwrap_or_else(|| default_target);
+    let rustlib_target = args.rustlib_target.clone().unwrap_or_else(|| target_triple);
 
-    let target_dylib_path = stdlibs_dir(&target_triple)?;
+    let target_dylib_path = stdlibs_dir(&rustlib_target)?;
 
     let mut rlib_paths = Vec::new();
 
@@ -666,6 +673,12 @@ fn get_cargo_args(args: &Args) -> Vec<String> {
         list.push(format!("--example={}", example));
     } else if let Some(ref test) = args.test {
         list.push(format!("--test={}", test));
+    }
+
+    if let Some(ref z) = args.z {
+        for unstable_flag in z.split(' ') {
+            list.push(format!("-Z={}", unstable_flag));
+        }
     }
 
     if let Some(ref package) = args.package {
