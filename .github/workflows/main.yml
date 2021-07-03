@@ -1,0 +1,19 @@
+name: cargo-bloat
+
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Build
+      run: cargo build
+
+    - name: Build with regex
+      run: cargo build --features regex-filter
