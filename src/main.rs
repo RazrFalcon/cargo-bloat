@@ -358,7 +358,10 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
                                      .unwrap_or(MessageFormat::Table),
     };
 
-    input.finish()?;
+    let remaining = input.finish();
+    if !remaining.is_empty() {
+        eprintln!("Warning: unused arguments left: {:?}.", remaining);
+    }
 
     Ok(args)
 }
