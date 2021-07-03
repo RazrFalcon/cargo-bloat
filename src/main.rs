@@ -40,7 +40,7 @@ pub struct CrateData {
 enum ArtifactKind {
     Binary,
     Library,
-    CDynLib,
+    DynLib,
 }
 
 #[derive(Debug)]
@@ -91,7 +91,7 @@ impl fmt::Display for Error {
                 write!(f, "failed to execute 'cargo build'. Probably a build error")
             }
             Error::UnsupportedCrateType => {
-                write!(f, "only 'bin' and 'cdylib' crate types are supported")
+                write!(f, "only 'bin', 'dylib' and 'cdylib' crate types are supported")
             }
             Error::OpenFailed(ref path) => {
                 write!(f, "failed to open a file '{}'", path.display())
@@ -236,6 +236,7 @@ USAGE:
 OPTIONS:
     -h, --help                      Prints help information
     -V, --version                   Prints version information
+        --lib                       Build only this package's library
         --bin <NAME>                Build only the specified binary
         --example <NAME>            Build only the specified example
         --test <NAME>               Build only the specified test target
@@ -278,6 +279,7 @@ fn parse_message_format(s: &str) -> Result<MessageFormat, &'static str> {
 pub struct Args {
     help: bool,
     version: bool,
+    lib: bool,
     bin: Option<String>,
     example: Option<String>,
     test: Option<String>,
@@ -309,6 +311,7 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
     let args = Args {
         help:                   input.contains(["-h", "--help"]),
         version:                input.contains(["-V", "--version"]),
+        lib:                    input.contains("--lib"),
         bin:                    input.opt_value_from_str("--bin")?,
         example:                input.opt_value_from_str("--example")?,
         test:                   input.opt_value_from_str("--test")?,
@@ -530,8 +533,8 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
                 for (path, crate_type) in filenames.zip(crate_types) {
                     let kind = match crate_type.as_str().unwrap() {
                         "bin" => ArtifactKind::Binary,
-                        "lib" => ArtifactKind::Library,
-                        "cdylib" => ArtifactKind::CDynLib,
+                        "lib" | "rlib" => ArtifactKind::Library,
+                        "dylib" | "cdylib" => ArtifactKind::DynLib,
                         _ => continue, // Simply ignore.
                     };
 
@@ -634,7 +637,7 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
         path.strip_prefix(workspace_root).unwrap_or(path).to_str().unwrap().to_string()
     };
 
-    // The last artifact should be our binary/cdylib.
+    // The last artifact should be our binary/dylib/cdylib.
     if let Some(ref artifact) = artifacts.last() {
         if artifact.kind != ArtifactKind::Library {
             return Ok(CrateData {
@@ -660,7 +663,9 @@ fn get_cargo_args(args: &Args) -> Vec<String> {
         list.push("--release".to_string());
     }
 
-    if let Some(ref bin) = args.bin {
+    if args.lib {
+        list.push("--lib".to_string());
+    } else if let Some(ref bin) = args.bin {
         list.push(format!("--bin={}", bin));
     } else if let Some(ref example) = args.example {
         list.push(format!("--example={}", example));
