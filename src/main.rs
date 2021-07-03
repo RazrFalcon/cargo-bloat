@@ -40,7 +40,7 @@ pub struct CrateData {
 enum ArtifactKind {
     Binary,
     Library,
-    CDynLib,
+    DynLib,
 }
 
 #[derive(Debug)]
@@ -91,7 +91,7 @@ impl fmt::Display for Error {
                 write!(f, "failed to execute 'cargo build'. Probably a build error")
             }
             Error::UnsupportedCrateType => {
-                write!(f, "only 'bin' and 'cdylib' crate types are supported")
+                write!(f, "only 'bin', 'dylib' and 'cdylib' crate types are supported")
             }
             Error::OpenFailed(ref path) => {
                 write!(f, "failed to open a file '{}'", path.display())
@@ -530,8 +530,8 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
                 for (path, crate_type) in filenames.zip(crate_types) {
                     let kind = match crate_type.as_str().unwrap() {
                         "bin" => ArtifactKind::Binary,
-                        "lib" => ArtifactKind::Library,
-                        "cdylib" => ArtifactKind::CDynLib,
+                        "lib" | "rlib" => ArtifactKind::Library,
+                        "dylib" | "cdylib" => ArtifactKind::DynLib,
                         _ => continue, // Simply ignore.
                     };
 
@@ -634,7 +634,7 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
         path.strip_prefix(workspace_root).unwrap_or(path).to_str().unwrap().to_string()
     };
 
-    // The last artifact should be our binary/cdylib.
+    // The last artifact should be our binary/dylib/cdylib.
     if let Some(ref artifact) = artifacts.last() {
         if artifact.kind != ArtifactKind::Library {
             return Ok(CrateData {
