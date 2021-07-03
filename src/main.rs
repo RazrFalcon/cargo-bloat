@@ -236,6 +236,7 @@ USAGE:
 OPTIONS:
     -h, --help                      Prints help information
     -V, --version                   Prints version information
+        --lib                       Build only this package's library
         --bin <NAME>                Build only the specified binary
         --example <NAME>            Build only the specified example
         --test <NAME>               Build only the specified test target
@@ -278,6 +279,7 @@ fn parse_message_format(s: &str) -> Result<MessageFormat, &'static str> {
 pub struct Args {
     help: bool,
     version: bool,
+    lib: bool,
     bin: Option<String>,
     example: Option<String>,
     test: Option<String>,
@@ -309,6 +311,7 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
     let args = Args {
         help:                   input.contains(["-h", "--help"]),
         version:                input.contains(["-V", "--version"]),
+        lib:                    input.contains("--lib"),
         bin:                    input.opt_value_from_str("--bin")?,
         example:                input.opt_value_from_str("--example")?,
         test:                   input.opt_value_from_str("--test")?,
@@ -660,7 +663,9 @@ fn get_cargo_args(args: &Args) -> Vec<String> {
         list.push("--release".to_string());
     }
 
-    if let Some(ref bin) = args.bin {
+    if args.lib {
+        list.push("--lib".to_string());
+    } else if let Some(ref bin) = args.bin {
         list.push(format!("--bin={}", bin));
     } else if let Some(ref example) = args.example {
         list.push(format!("--example={}", example));
