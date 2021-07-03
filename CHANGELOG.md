@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+## [0.10.1] - 2021-07-03
 ### Added
 - `dylib` support and the `--lib` flag thanks to [@bjorn3](https://github.com/bjorn3).
 - `--symbols-section` argument to select a custom ELF symbols section.
@@ -189,7 +190,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - When running on an unsupported OS you will get an error and not a random panic.
 - The table has a dynamic column width now.
 
-[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.9.1...v0.9.2
