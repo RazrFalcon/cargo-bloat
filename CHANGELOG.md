@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 ### Added
 - `dylib` support and the `--lib` flag thanks to [@bjorn3](https://github.com/bjorn3).
+- `--symbols-section` argument to select a custom ELF symbols section.
 
 ### Changed
 - `regex` is enabled by default.

@@ -254,6 +254,7 @@ OPTIONS:
         --time                      Per crate build time. Will run `cargo clean` first
         --filter <CRATE|REGEXP>     Filter functions by crate
         --split-std                 Split the 'std' crate to original crates like core, alloc, etc.
+        --symbols-section <NAME>    Use custom symbols section (ELF-only) [default: .text]
         --no-relative-size          Hide 'File' and '.text' columns
         --full-fn                   Print full function name with hash values
     -n <NUM>                        Number of lines to show, 0 to show all [default: 20]
@@ -297,6 +298,7 @@ pub struct Args {
     time: bool,
     filter: Option<String>,
     split_std: bool,
+    symbols_section: Option<String>,
     no_relative_size: bool,
     full_fn: bool,
     n: usize,
@@ -329,6 +331,7 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
         time:                   input.contains("--time"),
         filter:                 input.opt_value_from_str("--filter")?,
         split_std:              input.contains("--split-std"),
+        symbols_section:        input.opt_value_from_str("--symbols-section")?,
         no_relative_size:       input.contains("--no-relative-size"),
         full_fn:                input.contains("--full-fn"),
         n:                      input.opt_value_from_str("-n")?.unwrap_or(20),
@@ -641,9 +644,10 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     // The last artifact should be our binary/dylib/cdylib.
     if let Some(ref artifact) = artifacts.last() {
         if artifact.kind != ArtifactKind::Library {
+            let section_name = args.symbols_section.as_deref().unwrap_or(".text");
             return Ok(CrateData {
                 exe_path: Some(prepare_path(&artifact.path)),
-                data: collect_self_data(&artifact.path)?,
+                data: collect_self_data(&artifact.path, section_name)?,
                 std_crates,
                 dep_crates,
                 deps_symbols,
@@ -772,12 +776,12 @@ fn collect_deps_symbols(
     Ok(map)
 }
 
-fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
+fn collect_self_data(path: &path::Path, section_name: &str) -> Result<Data, Error> {
     let data = &map_file(&path)?;
 
     let d = match binfarce::detect_format(&data) {
-        Format::Elf32 { byte_order: _ } => collect_elf_data(data),
-        Format::Elf64 { byte_order: _ } => collect_elf_data(data),
+        Format::Elf32 { byte_order: _ } => collect_elf_data(data, section_name),
+        Format::Elf64 { byte_order: _ } => collect_elf_data(data, section_name),
         Format::Macho => collect_macho_data(data),
         Format::PE => collect_pe_data(data),
         Format::Unknown => None,
@@ -795,7 +799,7 @@ fn collect_self_data(path: &path::Path) -> Result<Data, Error> {
     Ok(d)
 }
 
-fn collect_elf_data(data: &[u8]) -> Option<Data> {
+fn collect_elf_data(data: &[u8], section_name: &str) -> Option<Data> {
     let is_64_bit = match data[4] {
         1 => false,
         2 => true,
@@ -809,9 +813,9 @@ fn collect_elf_data(data: &[u8]) -> Option<Data> {
     };
 
     let (symbols, text_size) = if is_64_bit {
-        elf64::parse(data, byte_order).unwrap().symbols().unwrap()
+        elf64::parse(data, byte_order).unwrap().symbols(section_name).unwrap()
     } else {
-        elf32::parse(data, byte_order).unwrap().symbols().unwrap()
+        elf32::parse(data, byte_order).unwrap().symbols(section_name).unwrap()
     };
 
     let d = Data {
