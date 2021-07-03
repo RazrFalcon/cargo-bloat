@@ -412,7 +412,8 @@ fn stdlibs_dir(target_triple: &str) -> Result<path::PathBuf, Error> {
     // Support xargo by applying the rustflags
     // This is meant to match how cargo handles the RUSTFLAG environment
     // variable.
-    // See https://github.com/rust-lang/cargo/blob/69aea5b6f69add7c51cca939a79644080c0b0ba0/src/cargo/core/compiler/build_context/target_info.rs#L434-L441
+    // See https://github.com/rust-lang/cargo/blob/69aea5b6f69add7c51cca939a79644080c0b0ba0
+    // /src/cargo/core/compiler/build_context/target_info.rs#L434-L441
     let rustflags = std::env::var("RUSTFLAGS")
         .unwrap_or("".to_string());
 

@@ -19,10 +19,10 @@ cargo install cargo-bloat
 or
 
 ```bash
-cargo install cargo-bloat --features regex-filter
+cargo install cargo-bloat --no-default-features 
 ```
 
-if you need regex filtering using the `--filter` option.
+if you don't need regex filtering using the `--filter` option.
 
 ### Usage
 

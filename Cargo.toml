@@ -24,4 +24,5 @@ default-features = false
 features = ["std"]
 
 [features]
+default = ["regex"]
 regex-filter = ["regex"]

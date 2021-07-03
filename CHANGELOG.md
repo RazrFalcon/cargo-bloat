@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- `dylib` support and the `--lib` flag thanks to [@bjorn3](https://github.com/bjorn3).
+
+### Changed
+- `regex` is enabled by default.
 
 ## [0.10.0] - 2020-09-08
 ### Changed

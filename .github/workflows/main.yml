@@ -15,5 +15,5 @@ jobs:
     - name: Build
       run: cargo build
 
-    - name: Build with regex
-      run: cargo build --features regex-filter
+    - name: Build without regex
+      run: cargo build --no-default-features
