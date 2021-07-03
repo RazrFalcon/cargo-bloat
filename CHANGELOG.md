@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - `regex` is enabled by default.
 
+### Fixed
+- Improve error processing.
+
 ## [0.10.0] - 2020-09-08
 ### Changed
 - The binary parsing code has been moved to the

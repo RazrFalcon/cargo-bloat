@@ -4,9 +4,9 @@ version = 3
 
 [[package]]
 name = "binfarce"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39d938293264350265e9563ce6e0c0197ef6e2ef867164b6afdd7cdc0779b8ff"
+checksum = "18464ccbb85e5dede30d70cc7676dc9950a0fb7dbf595a43d765be9123c616a2"
 
 [[package]]
 name = "cargo-bloat"

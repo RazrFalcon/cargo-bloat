@@ -69,6 +69,19 @@ enum Error {
     InvalidCargoOutput,
     NoArtifacts,
     UnsupportedFileFormat(path::PathBuf),
+    ParsingError(binfarce::ParseError),
+}
+
+impl From<binfarce::ParseError> for Error {
+    fn from(e: binfarce::ParseError) -> Self {
+        Error::ParsingError(e)
+    }
+}
+
+impl From<binfarce::UnexpectedEof> for Error {
+    fn from(_: binfarce::UnexpectedEof) -> Self {
+        Error::ParsingError(binfarce::ParseError::UnexpectedEof)
+    }
 }
 
 impl fmt::Display for Error {
@@ -104,6 +117,9 @@ impl fmt::Display for Error {
             }
             Error::UnsupportedFileFormat(ref path) => {
                 write!(f, "'{}' has an unsupported file format", path.display())
+            }
+            Error::ParsingError(ref e) => {
+                write!(f, "parsing failed cause '{}'", e)
             }
         }
     }
@@ -764,7 +780,7 @@ fn collect_deps_symbols(
 
     for (name, path) in libs {
         let file = map_file(&path)?;
-        for sym in ar::parse(&file).unwrap() {
+        for sym in ar::parse(&file)? {
             map.insert(sym, name.clone());
         }
     }
@@ -779,15 +795,13 @@ fn collect_deps_symbols(
 fn collect_self_data(path: &path::Path, section_name: &str) -> Result<Data, Error> {
     let data = &map_file(&path)?;
 
-    let d = match binfarce::detect_format(&data) {
-        Format::Elf32 { byte_order: _ } => collect_elf_data(data, section_name),
-        Format::Elf64 { byte_order: _ } => collect_elf_data(data, section_name),
-        Format::Macho => collect_macho_data(data),
-        Format::PE => collect_pe_data(data),
-        Format::Unknown => None,
+    let mut d = match binfarce::detect_format(&data) {
+        Format::Elf32 { byte_order: _ } => collect_elf_data(path, data, section_name)?,
+        Format::Elf64 { byte_order: _ } => collect_elf_data(path, data, section_name)?,
+        Format::Macho => collect_macho_data(data)?,
+        Format::PE => collect_pe_data(path, data)?,
+        Format::Unknown => return Err(Error::UnsupportedFileFormat(path.to_owned())),
     };
-
-    let mut d = d.ok_or_else(|| Error::UnsupportedFileFormat(path.to_owned()))?;
 
     // Multiple symbols may point to the same address.
     // Remove duplicates.
@@ -799,23 +813,23 @@ fn collect_self_data(path: &path::Path, section_name: &str) -> Result<Data, Erro
     Ok(d)
 }
 
-fn collect_elf_data(data: &[u8], section_name: &str) -> Option<Data> {
+fn collect_elf_data(path: &path::Path, data: &[u8], section_name: &str) -> Result<Data, Error> {
     let is_64_bit = match data[4] {
         1 => false,
         2 => true,
-        _ => return None,
+        _ => return Err(Error::UnsupportedFileFormat(path.to_owned())),
     };
 
     let byte_order = match data[5] {
         1 => ByteOrder::LittleEndian,
         2 => ByteOrder::BigEndian,
-        _ => return None,
+        _ => return Err(Error::UnsupportedFileFormat(path.to_owned())),
     };
 
     let (symbols, text_size) = if is_64_bit {
-        elf64::parse(data, byte_order).unwrap().symbols(section_name).unwrap()
+        elf64::parse(data, byte_order)?.symbols(section_name)?
     } else {
-        elf32::parse(data, byte_order).unwrap().symbols(section_name).unwrap()
+        elf32::parse(data, byte_order)?.symbols(section_name)?
     };
 
     let d = Data {
@@ -824,27 +838,27 @@ fn collect_elf_data(data: &[u8], section_name: &str) -> Option<Data> {
         text_size,
     };
 
-    Some(d)
+    Ok(d)
 }
 
-fn collect_macho_data(data: &[u8]) -> Option<Data> {
-    let (symbols, text_size) = macho::parse(data).unwrap().symbols().unwrap();
+fn collect_macho_data(data: &[u8]) -> Result<Data, Error> {
+    let (symbols, text_size) = macho::parse(data)?.symbols()?;
     let d = Data {
         symbols,
         file_size: 0,
         text_size,
     };
 
-    Some(d)
+    Ok(d)
 }
 
-fn collect_pe_data(data: &[u8]) -> Option<Data> {
-    let (symbols, text_size) = pe::parse(data).unwrap().symbols().unwrap();
+fn collect_pe_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
+    let (symbols, text_size) = pe::parse(data)?.symbols()?;
 
     // `pe::parse` will return zero symbols for an executable built with MSVC.
     if symbols.is_empty() {
         eprintln!("Warning: MSVC target is not supported.");
-        return None;
+        return Err(Error::UnsupportedFileFormat(path.to_owned()))
     }
 
     let d = Data {
@@ -853,7 +867,7 @@ fn collect_pe_data(data: &[u8]) -> Option<Data> {
         text_size,
     };
 
-    Some(d)
+    Ok(d)
 }
 
 struct Methods {

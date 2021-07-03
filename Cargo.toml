@@ -15,7 +15,7 @@ memmap2 = "0.1"
 multimap = { version = "0.8", default-features = false }
 pico-args = "0.3"
 term_size = "0.3.1"
-binfarce = "0.2.0"
+binfarce = "0.2.1"
 
 [dependencies.regex]
 version = "1.3"
