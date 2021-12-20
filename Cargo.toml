@@ -16,7 +16,7 @@ multimap = { version = "0.8", default-features = false }
 pico-args = "0.4.2"
 term_size = "0.3.1"
 binfarce = "0.2.1"
-pdb="0.7.0"
+pdb = "0.7.0"
 
 [dependencies.regex]
 version = "1.3"
