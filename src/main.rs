@@ -70,6 +70,7 @@ enum Error {
     NoArtifacts,
     UnsupportedFileFormat(path::PathBuf),
     ParsingError(binfarce::ParseError),
+    PdbError(pdb::Error),
 }
 
 impl From<binfarce::ParseError> for Error {
@@ -81,6 +82,12 @@ impl From<binfarce::ParseError> for Error {
 impl From<binfarce::UnexpectedEof> for Error {
     fn from(_: binfarce::UnexpectedEof) -> Self {
         Error::ParsingError(binfarce::ParseError::UnexpectedEof)
+    }
+}
+
+impl From<pdb::Error> for Error {
+    fn from(e: pdb::Error) -> Self {
+        Error::PdbError(e)
     }
 }
 
@@ -120,6 +127,9 @@ impl fmt::Display for Error {
             }
             Error::ParsingError(ref e) => {
                 write!(f, "parsing failed cause '{}'", e)
+            }
+            Error::PdbError(ref e) => {
+                write!(f, "error parsing pdb file cause '{}'", e)
             }
         }
     }
@@ -860,17 +870,158 @@ fn collect_pe_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
 
     // `pe::parse` will return zero symbols for an executable built with MSVC.
     if symbols.is_empty() {
-        eprintln!("Warning: MSVC target is not supported.");
-        return Err(Error::UnsupportedFileFormat(path.to_owned()))
+        use pdb::FallibleIterator;
+
+        let pdb_path = {
+            let file_name = if let Some(file_name) = path.file_name() {
+                if let Some(file_name) = file_name.to_str() {
+                    file_name.replace("-", "_")
+                } else {
+                    return Err(Error::OpenFailed(path.to_owned()));
+                }
+            } else {
+                return Err(Error::OpenFailed(path.to_owned()));
+            };
+            path.with_file_name(file_name).with_extension("pdb")
+        };
+        let file = std::fs::File::open(&pdb_path).unwrap();
+        let mut pdb = pdb::PDB::open(file)?;
+
+        let dbi = pdb.debug_information()?;
+        let symbol_table = pdb.global_symbols()?;
+        let address_map = pdb.address_map()?;
+
+        let mut out_symbols = vec![];
+
+        // Collect the PublicSymbols
+        let mut public_symbols = vec![];
+
+        let mut symbols = symbol_table.iter();
+        while let Ok(Some(symbol)) = symbols.next() {
+            match symbol.parse() {
+                Ok(pdb::SymbolData::Public(data)) => {
+                    if data.code || data.function {
+                        public_symbols.push((data.offset, data.name.to_string().into_owned()));
+                    }
+                    if data.name.to_string().contains("try_small_punycode_decode") {
+                        dbg!(&data);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut modules = dbi.modules()?;
+        while let Some(module) = modules.next()? {
+            let info = match pdb.module_info(&module)? {
+                Some(info) => info,
+                None => continue,
+            };
+            let mut symbols = info.symbols()?;
+            while let Some(symbol) = symbols.next()? {
+                if let Ok(pdb::SymbolData::Public(data)) = symbol.parse() {
+                    if data.code || data.function {
+                        public_symbols.push((data.offset, data.name.to_string().into_owned()));
+                    }
+                    if data.name.to_string().contains("try_small_punycode_decode") {
+                        dbg!(&data);
+                    }
+                }
+            }
+        }
+
+        let cmp_offsets = |a: &pdb::PdbInternalSectionOffset, b: &pdb::PdbInternalSectionOffset| {
+            a.section.cmp(&b.section).then(a.offset.cmp(&b.offset))
+        };
+        public_symbols.sort_unstable_by(|a, b| cmp_offsets(&a.0, &b.0));
+
+        // Now find the Procedure symbols in all modules
+        // and if possible the matching PublicSymbol record with the mangled name
+        let mut handle_proc = |proc: pdb::ProcedureSymbol| {
+            let mangled_symbol = public_symbols
+                .binary_search_by(|probe| {
+                    let low = cmp_offsets(&probe.0, &proc.offset);
+                    let high = cmp_offsets(&probe.0, &(proc.offset + proc.len));
+
+                    use std::cmp::Ordering::*;
+                    match (low, high) {
+                        // Less than the low bound -> less
+                        (Less, _) => Less,
+                        // More than the high bound -> greater
+                        (_, Greater) => Greater,
+                        _ => Equal,
+                    }
+                })
+                .ok()
+                .map(|x| &public_symbols[x]);
+
+            let demangled_name = proc.name.to_string().into_owned();
+            out_symbols.push((
+                proc.offset.to_rva(&address_map),
+                proc.len as u64,
+                demangled_name,
+                mangled_symbol,
+            ));
+        };
+
+        let mut symbols = symbol_table.iter();
+        while let Ok(Some(symbol)) = symbols.next() {
+            if let Ok(pdb::SymbolData::Procedure(proc)) = symbol.parse() {
+                handle_proc(proc);
+            }
+        }
+        let mut modules = dbi.modules()?;
+        while let Some(module) = modules.next()? {
+            let info = match pdb.module_info(&module)? {
+                Some(info) => info,
+                None => continue,
+            };
+
+            let mut symbols = info.symbols()?;
+
+            while let Some(symbol) = symbols.next()? {
+                if let Ok(pdb::SymbolData::Procedure(proc)) = symbol.parse() {
+                    handle_proc(proc);
+                }
+            }
+        }
+
+        let d = Data {
+            symbols: out_symbols
+                .into_iter()
+                .filter_map(|(address, size, unmangled_name, mangled_name)| {
+                    if let Some(address) = address {
+                        Some(SymbolData {
+                            name: mangled_name
+                                .map(|(_, mangled_name)| {
+                                    binfarce::demangle::SymbolName::demangle(mangled_name)
+                                })
+                                // Assume the Symbol record name is unmangled if we didn't find one
+                                .unwrap_or(binfarce::demangle::SymbolName::demangle(
+                                    &unmangled_name,
+                                )),
+                            address: address.0 as u64,
+                            size,
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            file_size: 0,
+            text_size,
+        };
+
+        Ok(d)
+    } else {
+        let d = Data {
+            symbols,
+            file_size: 0,
+            text_size,
+        };
+
+        Ok(d)
     }
-
-    let d = Data {
-        symbols,
-        file_size: 0,
-        text_size,
-    };
-
-    Ok(d)
 }
 
 struct Methods {
