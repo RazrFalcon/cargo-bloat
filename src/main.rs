@@ -997,9 +997,12 @@ fn collect_pe_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
                                     binfarce::demangle::SymbolName::demangle(mangled_name)
                                 })
                                 // Assume the Symbol record name is unmangled if we didn't find one
-                                .unwrap_or(binfarce::demangle::SymbolName::demangle(
-                                    &unmangled_name,
-                                )),
+                                .unwrap_or(binfarce::demangle::SymbolName {
+                                    complete: unmangled_name.clone(),
+                                    trimmed: unmangled_name.clone(),
+                                    crate_name: None,
+                                    kind: binfarce::demangle::Kind::V0,
+                                }),
                             address: address.0 as u64,
                             size,
                         })
