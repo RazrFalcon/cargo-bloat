@@ -6,8 +6,6 @@ Inspired by [google/bloaty](https://github.com/google/bloaty).
 
 **Note:** supports ELF (Linux, BSD), Mach-O (macOS) and PE (Windows) binaries.
 
-**Note:** Windows MSVC target is not supported. See [#17](https://github.com/RazrFalcon/cargo-bloat/issues/17).
-
 **Note:** WASM is not supported. Prefer [twiggy](https://github.com/rustwasm/twiggy) instead.
 
 ### Install
