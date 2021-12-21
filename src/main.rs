@@ -341,7 +341,7 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
         features:               input.opt_value_from_str("--features")?,
         all_features:           input.contains("--all-features"),
         no_default_features:    input.contains("--no-default-features"),
-        profile:                 input.opt_value_from_str("--profile")?,
+        profile:                input.opt_value_from_str("--profile")?,
         target:                 input.opt_value_from_str("--target")?,
         target_dir:             input.opt_value_from_str("--target-dir")?,
         frozen:                 input.contains("--frozen"),
