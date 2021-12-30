@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- Forward compiler errors when building a crate.
+
 ## [0.10.1] - 2021-07-03
 ### Added
 - `dylib` support and the `--lib` flag thanks to [@bjorn3](https://github.com/bjorn3).

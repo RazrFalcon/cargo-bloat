@@ -541,16 +541,35 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
             .output();
 
         Command::new("cargo")
-            .args(&get_cargo_args(args))
+            .args(&get_cargo_args(args, true))
             .env("RUSTC_WRAPPER", "cargo-bloat")
             .stdout(std::process::Stdio::piped())
             // Hide cargo output, because we are using stderr to track build time.
             .stderr(std::process::Stdio::piped())
             .spawn().map_err(|_| Error::CargoBuildFailed)?
     } else {
+        // Run `cargo build` without json output first, so we could print build errors.
+        {
+            let cmd = &mut Command::new("cargo");
+            cmd.args(&get_cargo_args(args, false));
+
+            // When targeting MSVC, symbols data will be stored in PDB files.
+            // But unlike other targets, the Release build would not have any useful information.
+            // Therefore we have to force debug info in Release mode for MSVC target.
+            if args.release && target_triple.contains("msvc") {
+                cmd.env("CARGO_PROFILE_RELEASE_DEBUG", "true");
+            }
+
+            cmd.spawn().map_err(|_| Error::CargoBuildFailed)?
+                .wait().map_err(|_| Error::CargoBuildFailed)?;
+        }
+
+        // Run `cargo build` with json output and collect it.
+        // This would not cause a rebuild.
         let cmd = &mut Command::new("cargo");
-        cmd.args(&get_cargo_args(args));
+        cmd.args(&get_cargo_args(args, true));
         cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::null());
 
         // When targeting MSVC, symbols data will be stored in PDB files.
         // But unlike other targets, the Release build would not have any useful information.
@@ -699,10 +718,13 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     Err(Error::UnsupportedCrateType)
 }
 
-fn get_cargo_args(args: &Args) -> Vec<String> {
+fn get_cargo_args(args: &Args, json_output: bool) -> Vec<String> {
     let mut list = Vec::new();
     list.push("build".to_string());
-    list.push("--message-format=json".to_string());
+
+    if json_output {
+        list.push("--message-format=json".to_string());
+    }
 
     if args.release {
         list.push("--release".to_string());
