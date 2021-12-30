@@ -520,6 +520,9 @@ fn get_workspace_root() -> Result<String, Error> {
 fn process_crate(args: &Args) -> Result<CrateData, Error> {
     let workspace_root = get_workspace_root()?;
 
+    let default_target = get_default_target()?;
+    let target_triple = args.target.clone().unwrap_or_else(|| default_target);
+
     let child = if args.time {
         // To collect the build times we have to clean the repo first.
 
@@ -545,10 +548,18 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
             .stderr(std::process::Stdio::piped())
             .spawn().map_err(|_| Error::CargoBuildFailed)?
     } else {
-        Command::new("cargo")
-            .args(&get_cargo_args(args))
-            .stdout(std::process::Stdio::piped())
-            .spawn().map_err(|_| Error::CargoBuildFailed)?
+        let cmd = &mut Command::new("cargo");
+        cmd.args(&get_cargo_args(args));
+        cmd.stdout(std::process::Stdio::piped());
+
+        // When targeting MSVC, symbols data will be stored in PDB files.
+        // But unlike other targets, the Release build would not have any useful information.
+        // Therefore we have to force debug info in Release mode for MSVC target.
+        if args.release && target_triple.contains("msvc") {
+            cmd.env("CARGO_PROFILE_RELEASE_DEBUG", "true");
+        }
+
+        cmd.spawn().map_err(|_| Error::CargoBuildFailed)?
     };
 
     let output = child.wait_with_output().map_err(|_| Error::CargoBuildFailed)?;
@@ -633,9 +644,6 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
             times,
         });
     }
-
-    let default_target = get_default_target()?;
-    let target_triple = args.target.clone().unwrap_or_else(|| default_target);
 
     let target_dylib_path = stdlibs_dir(&target_triple)?;
 
@@ -734,7 +742,7 @@ fn get_cargo_args(args: &Args) -> Vec<String> {
     if args.verbose {
         list.push("-v".into());
     }
- 
+
     if let Some(ref profile) = args.profile {
         list.push(format!("--profile={}", profile));
     }
