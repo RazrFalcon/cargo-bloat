@@ -884,7 +884,7 @@ fn collect_macho_data(data: &[u8]) -> Result<Data, Error> {
 fn collect_pdb_data(pdb_path: &path::Path, text_size: u64) -> Result<Data, Error> {
     use pdb::FallibleIterator;
 
-    let file = std::fs::File::open(&pdb_path).map_err(|_| Error::OpenFailed(pdb_path.to_owned()))?;
+    let file = fs::File::open(&pdb_path).map_err(|_| Error::OpenFailed(pdb_path.to_owned()))?;
     let mut pdb = pdb::PDB::open(file)?;
 
     let dbi = pdb.debug_information()?;
@@ -893,7 +893,7 @@ fn collect_pdb_data(pdb_path: &path::Path, text_size: u64) -> Result<Data, Error
 
     let mut out_symbols = Vec::new();
 
-    // Collect the PublicSymbols
+    // Collect the PublicSymbols.
     let mut public_symbols = Vec::new();
 
     let mut symbols = symbol_table.iter();
@@ -930,7 +930,7 @@ fn collect_pdb_data(pdb_path: &path::Path, text_size: u64) -> Result<Data, Error
     public_symbols.sort_unstable_by(|a, b| cmp_offsets(&a.0, &b.0));
 
     // Now find the Procedure symbols in all modules
-    // and if possible the matching PublicSymbol record with the mangled name
+    // and if possible the matching PublicSymbol record with the mangled name.
     let mut handle_proc = |proc: pdb::ProcedureSymbol| {
         let mangled_symbol = public_symbols
             .binary_search_by(|probe| {
@@ -939,9 +939,9 @@ fn collect_pdb_data(pdb_path: &path::Path, text_size: u64) -> Result<Data, Error
 
                 use std::cmp::Ordering::*;
                 match (low, high) {
-                    // Less than the low bound -> less
+                    // Less than the low bound -> less.
                     (Less, _) => Less,
-                    // More than the high bound -> greater
+                    // More than the high bound -> greater.
                     (_, Greater) => Greater,
                     _ => Equal,
                 }
@@ -964,6 +964,7 @@ fn collect_pdb_data(pdb_path: &path::Path, text_size: u64) -> Result<Data, Error
             handle_proc(proc);
         }
     }
+
     let mut modules = dbi.modules()?;
     while let Some(module) = modules.next()? {
         let info = match pdb.module_info(&module)? {
@@ -980,35 +981,37 @@ fn collect_pdb_data(pdb_path: &path::Path, text_size: u64) -> Result<Data, Error
         }
     }
 
+    let symbols = out_symbols
+        .into_iter()
+        .filter_map(|(address, size, unmangled_name, mangled_name)| {
+            if let Some(address) = address {
+                Some(SymbolData {
+                    name: mangled_name
+                        .map(|(_, mangled_name)| {
+                            binfarce::demangle::SymbolName::demangle(mangled_name)
+                        })
+                        // Assume the Symbol record name is unmangled if we didn't find one.
+                        // Note that unmangled names stored in PDB have a different format from
+                        // one stored in binaries itself. Specifically they do not include hash
+                        // and can have a bit different formatting.
+                        // We also assume that a Legacy mangling scheme were used.
+                        .unwrap_or_else(|| binfarce::demangle::SymbolName {
+                            complete: unmangled_name.clone(),
+                            trimmed: unmangled_name.clone(),
+                            crate_name: None,
+                            kind: binfarce::demangle::Kind::Legacy,
+                        }),
+                    address: address.0 as u64,
+                    size,
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+
     let d = Data {
-        symbols: out_symbols
-            .into_iter()
-            .filter_map(|(address, size, unmangled_name, mangled_name)| {
-                if let Some(address) = address {
-                    Some(SymbolData {
-                        name: mangled_name
-                            .map(|(_, mangled_name)| {
-                                binfarce::demangle::SymbolName::demangle(mangled_name)
-                            })
-                            // Assume the Symbol record name is unmangled if we didn't find one.
-                            // Note that unmangled names stored in PDB have a different format from
-                            // one stored in binaries itself. Specifically they do not include hash
-                            // and can have a bit different formatting.
-                            // We also assume that a Legacy mangling scheme were used.
-                            .unwrap_or_else(|| binfarce::demangle::SymbolName {
-                                complete: unmangled_name.clone(),
-                                trimmed: unmangled_name.clone(),
-                                crate_name: None,
-                                kind: binfarce::demangle::Kind::Legacy,
-                            }),
-                        address: address.0 as u64,
-                        size,
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect(),
+        symbols,
         file_size: 0,
         text_size,
     };
