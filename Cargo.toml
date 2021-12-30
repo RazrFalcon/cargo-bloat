@@ -1,6 +1,6 @@
 [package]
 name = "cargo-bloat"
-version = "0.10.1"
+version = "0.11.0"
 authors = ["Evgeniy Reizner <razrfalcon@gmail.com>"]
 description = "Find out what takes most of the space in your executable."
 categories = ["development-tools::cargo-plugins"]
@@ -11,7 +11,7 @@ edition = "2018"
 
 [dependencies]
 json = "0.12"
-memmap2 = "0.3"
+memmap2 = "0.5"
 multimap = { version = "0.8", default-features = false }
 pico-args = "0.4.2"
 term_size = "0.3.1"

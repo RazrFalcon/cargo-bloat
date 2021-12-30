@@ -10,7 +10,7 @@ checksum = "18464ccbb85e5dede30d70cc7676dc9950a0fb7dbf595a43d765be9123c616a2"
 
 [[package]]
 name = "cargo-bloat"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "binfarce",
  "json",
@@ -36,15 +36,15 @@ checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
 name = "libc"
-version = "0.2.97"
+version = "0.2.112"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12b8adadd720df158f4d70dfe7ccc6adb0472d7c55ca83445f6a5ab3e36f8fb6"
+checksum = "1b03d17f364a3a042d5e5d46b053bbbf82c92c9430c592dd4c064dc6ee997125"
 
 [[package]]
 name = "memmap2"
-version = "0.3.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20ff203f7bdc401350b1dbaa0355135777d25f41c0bbc601851bbd6cf61e8ff5"
+checksum = "4647a11b578fead29cdbb34d4adef8dd3dc35b876c9c6d5240d83f205abfe96e"
 dependencies = [
  "libc",
 ]

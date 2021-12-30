@@ -5,12 +5,17 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [0.11.0] - 2021-12-30
 ### Added
+- Initial PDB support (Windows MSVC target) thanks to [@nico-abram](https://github.com/nico-abram).
 - Forward compiler errors when building a crate.
 - Support unstable cargo options, aka `-Z`.
+- `--profile` flag thanks to [@nico-abram](https://github.com/nico-abram).
 
 ### Fixed
 - Run `cargo clean` after `cargo bloat --time` to prevent `RUSTC_WRAPPER` caching.
+- `regex` enabling by default thanks to [@Arnavion](https://github.com/Arnavion).
 
 ## [0.10.1] - 2021-07-03
 ### Added
@@ -197,7 +202,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - When running on an unsupported OS you will get an error and not a random panic.
 - The table has a dynamic column width now.
 
-[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.9.2...v0.9.3
