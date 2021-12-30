@@ -2,11 +2,11 @@
 
 Find out what takes most of the space in your executable.
 
+Supports ELF (Linux, BSD), Mach-O (macOS) and PE (Windows) binaries.
+
+WASM is not supported. Use [twiggy](https://github.com/rustwasm/twiggy) instead.
+
 Inspired by [google/bloaty](https://github.com/google/bloaty).
-
-**Note:** supports ELF (Linux, BSD), Mach-O (macOS) and PE (Windows) binaries.
-
-**Note:** WASM is not supported. Prefer [twiggy](https://github.com/rustwasm/twiggy) instead.
 
 ### Install
 
@@ -17,7 +17,7 @@ cargo install cargo-bloat
 or
 
 ```bash
-cargo install cargo-bloat --no-default-features 
+cargo install cargo-bloat --no-default-features
 ```
 
 if you don't need regex filtering using the `--filter` option.
@@ -89,6 +89,27 @@ File .text    Size Crate Name
 0.0%  0.0%    180B   std __rdos_backtrace_vector_grow
 0.1%  0.7%  2.8KiB       And 37 smaller methods. Use -n N to show more.
 0.5%  3.6% 13.5KiB       filtered data size, the file size is 2.8MiB
+```
+
+Get a list of crates that took longest to compile:
+
+```
+% cargo bloat --time -j 1
+ Time Crate
+1.42s pdb
+1.37s regex_syntax
+1.11s cargo_bloat
+0.96s regex
+0.58s binfarce
+0.54s json
+0.45s libc
+0.22s uuid
+0.20s fallible_iterator
+0.19s pico_args
+0.18s scroll
+0.12s memmap2
+0.09s multimap
+0.06s term_size
 ```
 
 Flags specific for `cargo-bloat`:
