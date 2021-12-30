@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - Forward compiler errors when building a crate.
 
+### Fixed
+- Run `cargo clean` after `cargo bloat --time` to prevent `RUSTC_WRAPPER` caching.
+
 ## [0.10.1] - 2021-07-03
 ### Added
 - `dylib` support and the `--lib` flag thanks to [@bjorn3](https://github.com/bjorn3).

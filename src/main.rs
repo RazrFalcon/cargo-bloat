@@ -525,20 +525,7 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
 
     let child = if args.time {
         // To collect the build times we have to clean the repo first.
-
-        let clean_args = if args.release {
-            // Remove only `target/release` in the release mode.
-            vec!["clean", "--release"]
-        } else {
-            // We can't remove only `target/debug` in debug mode yet.
-            // See https://github.com/rust-lang/cargo/pull/6989
-            vec!["clean"]
-        };
-
-        // No need to check the output status.
-        let _ = Command::new("cargo")
-            .args(&clean_args)
-            .output();
+        cargo_clean(args.release);
 
         Command::new("cargo")
             .args(&get_cargo_args(args, true))
@@ -653,6 +640,10 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     }
 
     if args.time && !args.crates {
+        // Clean target again, because cargo will cache RUSTC_WRAPPER,
+        // which is not what we want.
+        cargo_clean(args.release);
+
         // We don't care about symbols if we only plan to print the build times.
         return Ok(CrateData {
             exe_path: None,
@@ -791,6 +782,22 @@ fn get_cargo_args(args: &Args, json_output: bool) -> Vec<String> {
     }
 
     list
+}
+
+fn cargo_clean(release: bool) {
+    let clean_args = if release {
+        // Remove only `target/release` in the release mode.
+        vec!["clean", "--release"]
+    } else {
+        // We can't remove only `target/debug` in debug mode yet.
+        // See https://github.com/rust-lang/cargo/pull/6989
+        vec!["clean"]
+    };
+
+    // No need to check the output status.
+    let _ = Command::new("cargo")
+        .args(&clean_args)
+        .output();
 }
 
 fn collect_rlib_paths(deps_dir: &path::Path) -> Vec<(String, path::PathBuf)> {
