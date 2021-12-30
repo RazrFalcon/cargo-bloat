@@ -990,12 +990,16 @@ fn collect_pdb_data(pdb_path: &path::Path, text_size: u64) -> Result<Data, Error
                             .map(|(_, mangled_name)| {
                                 binfarce::demangle::SymbolName::demangle(mangled_name)
                             })
-                            // Assume the Symbol record name is unmangled if we didn't find one
-                            .unwrap_or(binfarce::demangle::SymbolName {
+                            // Assume the Symbol record name is unmangled if we didn't find one.
+                            // Note that unmangled names stored in PDB have a different format from
+                            // one stored in binaries itself. Specifically they do not include hash
+                            // and can have a bit different formatting.
+                            // We also assume that a Legacy mangling scheme were used.
+                            .unwrap_or_else(|| binfarce::demangle::SymbolName {
                                 complete: unmangled_name.clone(),
                                 trimmed: unmangled_name.clone(),
                                 crate_name: None,
-                                kind: binfarce::demangle::Kind::V0,
+                                kind: binfarce::demangle::Kind::Legacy,
                             }),
                         address: address.0 as u64,
                         size,
