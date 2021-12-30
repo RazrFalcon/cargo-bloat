@@ -277,6 +277,7 @@ OPTIONS:
         --target-dir <DIRECTORY>    Directory for all generated artifacts
         --frozen                    Require Cargo.lock and cache are up to date
         --locked                    Require Cargo.lock is up to date
+    -Z <FLAG>...                    Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
         --crates                    Per crate bloatedness
         --time                      Per crate build time. Will run `cargo clean` first
         --filter <CRATE|REGEXP>     Filter functions by crate
@@ -322,6 +323,7 @@ pub struct Args {
     target_dir: Option<String>,
     frozen: bool,
     locked: bool,
+    unstable: Vec<String>,
     crates: bool,
     time: bool,
     filter: Option<String>,
@@ -356,6 +358,7 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
         target_dir:             input.opt_value_from_str("--target-dir")?,
         frozen:                 input.contains("--frozen"),
         locked:                 input.contains("--locked"),
+        unstable:               input.values_from_str("-Z")?,
         crates:                 input.contains("--crates"),
         time:                   input.contains("--time"),
         filter:                 input.opt_value_from_str("--filter")?,
@@ -775,6 +778,10 @@ fn get_cargo_args(args: &Args, json_output: bool) -> Vec<String> {
 
     if args.locked {
         list.push("--locked".to_string());
+    }
+
+    for arg in &args.unstable {
+        list.push(format!("-Z={}", arg));
     }
 
     if let Some(jobs) = args.jobs {

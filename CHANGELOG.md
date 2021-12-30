@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 ### Added
 - Forward compiler errors when building a crate.
+- Support unstable cargo options, aka `-Z`.
 
 ### Fixed
 - Run `cargo clean` after `cargo bloat --time` to prevent `RUSTC_WRAPPER` caching.
