@@ -1,5 +1,2 @@
-/target/
-**/*.rs.bk
-.idea
-cargo-bloat.iml
-Cargo.lock
+target
+.DS_Store
