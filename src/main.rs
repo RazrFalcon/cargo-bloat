@@ -658,8 +658,6 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
         });
     }
 
-    let target_dylib_path = stdlibs_dir(&target_triple)?;
-
     let mut rlib_paths = Vec::new();
 
     let mut dep_crates = Vec::new();
@@ -674,19 +672,29 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     dep_crates.dedup();
     dep_crates.sort();
 
-    let std_paths = collect_rlib_paths(&target_dylib_path);
-    let mut std_crates: Vec<String> = std_paths.iter().map(|v| v.0.clone()).collect();
-    rlib_paths.extend_from_slice(&std_paths);
-    std_crates.sort();
+    let std_crates: Vec<String> = if args
+        .unstable
+        .iter()
+        .any(|unstable_arg| unstable_arg.starts_with("build-std"))
+    {
+        Vec::new()
+    } else {
+        let target_dylib_path = stdlibs_dir(&target_triple)?;
+        let std_paths = collect_rlib_paths(&target_dylib_path);
+        let mut std_crates: Vec<String> = std_paths.iter().map(|v| v.0.clone()).collect();
+        rlib_paths.extend_from_slice(&std_paths);
+        std_crates.sort();
 
-    // Remove std crates that was explicitly added as dependencies.
-    //
-    // Like: getopts, bitflags, backtrace, log, etc.
-    for c in &dep_crates {
-        if let Some(idx) = std_crates.iter().position(|v| v == c) {
-            std_crates.remove(idx);
+        // Remove std crates that was explicitly added as dependencies.
+        //
+        // Like: getopts, bitflags, backtrace, log, etc.
+        for c in &dep_crates {
+            if let Some(idx) = std_crates.iter().position(|v| v == c) {
+                std_crates.remove(idx);
+            }
         }
-    }
+        std_crates
+    };
 
     let deps_symbols = collect_deps_symbols(rlib_paths)?;
 
