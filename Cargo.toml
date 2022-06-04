@@ -13,7 +13,7 @@ edition = "2018"
 json = "0.12"
 memmap2 = "0.5"
 multimap = { version = "0.8", default-features = false }
-pico-args = { version = "0.4.2", features = ["short-space-opt"]}
+pico-args = { version = "0.5.0", features = ["eq-separator", "short-space-opt"]}
 term_size = "0.3.1"
 binfarce = "0.2.1"
 pdb = "0.7.0"
