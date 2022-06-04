@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.1] - 2022-06-04
+### Added
+- Mention `cargo --timings` when using `cargo bloat --time`.
+
+### Changed
+- Allow short arguments without a space.
+
+### Fixed
+- Improve `build-std` support thanks to [@jschwe](https://github.com/jschwe).
+
 ## [0.11.0] - 2021-12-30
 ### Added
 - Initial PDB support (Windows MSVC target) thanks to [@nico-abram](https://github.com/nico-abram).
@@ -202,7 +212,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - When running on an unsupported OS you will get an error and not a random panic.
 - The table has a dynamic column width now.
 
-[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/RazrFalcon/cargo-bloat/compare/v0.9.3...v0.10.0
