@@ -246,6 +246,11 @@ fn main() {
                       They are not 100% correct and never will be.");
         }
 
+        if args.time {
+            println!();
+            println!("Note: prefer using `cargo --timings`.");
+        }
+
         if args.time && args.jobs != Some(1) {
             println!();
             println!("Note: prefer using `-j 1` argument to disable a multithreaded build.");
