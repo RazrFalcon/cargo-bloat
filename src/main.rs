@@ -25,6 +25,7 @@ struct Data {
     symbols: Vec<SymbolData>,
     file_size: u64,
     text_size: u64,
+    section_name: Option<String>,
 }
 
 pub struct CrateData {
@@ -655,7 +656,7 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
         // We don't care about symbols if we only plan to print the build times.
         return Ok(CrateData {
             exe_path: None,
-            data: Data { symbols: Vec::new(), file_size: 0, text_size: 0 },
+            data: Data { symbols: Vec::new(), file_size: 0, text_size: 0, section_name: None },
             std_crates: Vec::new(),
             dep_crates: Vec::new(),
             deps_symbols: MultiMap::new(),
@@ -914,6 +915,7 @@ fn collect_elf_data(path: &path::Path, data: &[u8], section_name: &str) -> Resul
         symbols,
         file_size: 0,
         text_size,
+        section_name: Some(section_name.to_owned()),
     };
 
     Ok(d)
@@ -925,6 +927,7 @@ fn collect_macho_data(data: &[u8]) -> Result<Data, Error> {
         symbols,
         file_size: 0,
         text_size,
+        section_name: None,
     };
 
     Ok(d)
@@ -1063,6 +1066,7 @@ fn collect_pdb_data(pdb_path: &path::Path, text_size: u64) -> Result<Data, Error
         symbols,
         file_size: 0,
         text_size,
+        section_name: None,
     };
 
     Ok(d)
@@ -1092,6 +1096,7 @@ fn collect_pe_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
             symbols,
             file_size: 0,
             text_size,
+            section_name: None,
         })
     }
 }
@@ -1257,7 +1262,7 @@ fn print_methods_table(methods: Methods, data: &Data, term_width: Option<usize>)
             format_percent(100.0),
             format_size(data.text_size),
             String::new(),
-            format!(".text section size, the file size is {}", format_size(data.file_size)),
+            format!("{} section size, the file size is {}", data.section_name.as_deref().unwrap_or(".text"), format_size(data.file_size)),
         ]);
     }
 
@@ -1408,7 +1413,7 @@ fn print_crates_table(crates: Crates, data: &Data, term_width: Option<usize>) {
         format_percent(data.text_size as f64 / data.file_size as f64 * 100.0),
         format_percent(100.0),
         format_size(data.text_size),
-        format!(".text section size, the file size is {}", format_size(data.file_size)),
+        format!("{} section size, the file size is {}", data.section_name.as_deref().unwrap_or(".text"), format_size(data.file_size)),
     ]);
 
     print!("{}", table);
@@ -1434,7 +1439,7 @@ fn print_crates_table_no_relative(crates: Crates, data: &Data, term_width: Optio
 
     table.push(&[
         format_size(data.text_size),
-        format!(".text section size, the file size is {}", format_size(data.file_size)),
+        format!("{} section size, the file size is {}", data.section_name.as_deref().unwrap_or(".text"), format_size(data.file_size)),
     ]);
 
     print!("{}", table);
