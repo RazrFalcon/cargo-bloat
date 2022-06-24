@@ -1217,7 +1217,8 @@ fn filter_methods(d: &mut CrateData, args: &Args) -> Methods {
 }
 
 fn print_methods_table(methods: Methods, data: &Data, term_width: Option<usize>) {
-    let mut table = Table::new(&["File", ".text", "Size", "Crate", "Name"]);
+    let section_name = data.section_name.as_deref().unwrap_or(".text");
+    let mut table = Table::new(&["File", &section_name, "Size", "Crate", "Name"]);
     table.set_width(term_width);
 
     for method in &methods.methods {
@@ -1262,7 +1263,7 @@ fn print_methods_table(methods: Methods, data: &Data, term_width: Option<usize>)
             format_percent(100.0),
             format_size(data.text_size),
             String::new(),
-            format!("{} section size, the file size is {}", data.section_name.as_deref().unwrap_or(".text"), format_size(data.file_size)),
+            format!("{} section size, the file size is {}", section_name, format_size(data.file_size)),
         ]);
     }
 
@@ -1388,7 +1389,8 @@ fn filter_crates(d: &mut CrateData, args: &Args) -> Crates {
 }
 
 fn print_crates_table(crates: Crates, data: &Data, term_width: Option<usize>) {
-    let mut table = Table::new(&["File", ".text", "Size", "Crate"]);
+    let section_name = data.section_name.as_deref().unwrap_or(".text");
+    let mut table = Table::new(&["File", &section_name, "Size", "Crate"]);
     table.set_width(term_width);
 
     for item in &crates.crates {
@@ -1413,7 +1415,7 @@ fn print_crates_table(crates: Crates, data: &Data, term_width: Option<usize>) {
         format_percent(data.text_size as f64 / data.file_size as f64 * 100.0),
         format_percent(100.0),
         format_size(data.text_size),
-        format!("{} section size, the file size is {}", data.section_name.as_deref().unwrap_or(".text"), format_size(data.file_size)),
+        format!("{} section size, the file size is {}", section_name, format_size(data.file_size)),
     ]);
 
     print!("{}", table);
@@ -1437,9 +1439,10 @@ fn print_crates_table_no_relative(crates: Crates, data: &Data, term_width: Optio
         ]);
     }
 
+    let section_name = data.section_name.as_deref().unwrap_or(".text");
     table.push(&[
         format_size(data.text_size),
-        format!("{} section size, the file size is {}", data.section_name.as_deref().unwrap_or(".text"), format_size(data.file_size)),
+        format!("{} section size, the file size is {}", section_name, format_size(data.file_size)),
     ]);
 
     print!("{}", table);
