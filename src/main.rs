@@ -1,3 +1,6 @@
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::collapsible_else_if)]
+
 use std::{fs, fmt, path, str};
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -58,6 +61,7 @@ struct Elapsed {
     build_script: bool,
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug)]
 enum Error {
     StdDirNotFound(path::PathBuf),
@@ -142,7 +146,7 @@ impl std::error::Error for Error {}
 fn main() {
     if let Ok(wrap) = std::env::var("RUSTC_WRAPPER") {
         if wrap.contains("cargo-bloat") {
-            let args: Vec<_> = std::env::args().map(|a| a.to_string()).collect();
+            let args: Vec<_> = std::env::args().collect();
             match wrapper_mode(&args) {
                 Ok(_) => return,
                 Err(e) => {
@@ -429,7 +433,7 @@ fn wrapper_mode(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             if let Some(name) = path.file_name() {
                 let name = name.to_str().unwrap().to_string();
                 let name = name.replace(&extra_filename, "");
-                let name = name.replace("-", "_");
+                let name = name.replace('-', "_");
                 crate_name = name;
             }
         }
@@ -459,7 +463,7 @@ fn stdlibs_dir(target_triple: &str) -> Result<path::PathBuf, Error> {
     // See https://github.com/rust-lang/cargo/blob/69aea5b6f69add7c51cca939a79644080c0b0ba0
     // /src/cargo/core/compiler/build_context/target_info.rs#L434-L441
     let rustflags = std::env::var("RUSTFLAGS")
-        .unwrap_or("".to_string());
+        .unwrap_or_else(|_| String::new());
 
     let rustflags = rustflags
         .split(' ')
@@ -517,9 +521,9 @@ fn get_workspace_root() -> Result<String, Error> {
     }
 
     let stdout = str::from_utf8(&output.stdout).unwrap();
-    for line in stdout.lines() {
+    if let Some(line) = stdout.lines().next() {
         let meta = json::parse(line).map_err(|_| Error::InvalidCargoOutput)?;
-        let root = meta["workspace_root"].as_str().ok_or_else(|| Error::InvalidCargoOutput)?;
+        let root = meta["workspace_root"].as_str().ok_or(Error::InvalidCargoOutput)?;
         return Ok(root.to_string());
     }
 
@@ -530,7 +534,7 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     let workspace_root = get_workspace_root()?;
 
     let default_target = get_default_target()?;
-    let target_triple = args.target.clone().unwrap_or_else(|| default_target);
+    let target_triple = args.target.clone().unwrap_or(default_target);
 
     let child = if args.time {
         // To collect the build times we have to clean the repo first.
@@ -603,7 +607,7 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
                     artifacts.push({
                         Artifact {
                             kind,
-                            name: target_name.replace("-", "_"),
+                            name: target_name.replace('-', "_"),
                             path: path::PathBuf::from(&path.as_str().unwrap()),
                         }
                     });
@@ -709,7 +713,7 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     };
 
     // The last artifact should be our binary/dylib/cdylib.
-    if let Some(ref artifact) = artifacts.last() {
+    if let Some(artifact) = artifacts.last() {
         if artifact.kind != ArtifactKind::Library {
             let section_name = args.symbols_section.as_deref().unwrap_or(".text");
             return Ok(CrateData {
@@ -726,6 +730,7 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     Err(Error::UnsupportedCrateType)
 }
 
+#[allow(clippy::vec_init_then_push)]
 fn get_cargo_args(args: &Args, json_output: bool) -> Vec<String> {
     let mut list = Vec::new();
     list.push("build".to_string());
@@ -824,19 +829,17 @@ fn cargo_clean(release: bool) {
 fn collect_rlib_paths(deps_dir: &path::Path) -> Vec<(String, path::PathBuf)> {
     let mut rlib_paths: Vec<(String, path::PathBuf)> = Vec::new();
     if let Ok(entries) = fs::read_dir(deps_dir) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if let Some(Some("rlib")) = path.extension().map(|s| s.to_str()) {
-                    let mut stem = path.file_stem().unwrap().to_str().unwrap().to_string();
-                    if let Some(idx) = stem.bytes().position(|b| b == b'-') {
-                        stem.drain(idx..);
-                    }
-
-                    stem.drain(0..3); // trim 'lib'
-
-                    rlib_paths.push((stem, path));
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(Some("rlib")) = path.extension().map(|s| s.to_str()) {
+                let mut stem = path.file_stem().unwrap().to_str().unwrap().to_string();
+                if let Some(idx) = stem.bytes().position(|b| b == b'-') {
+                    stem.drain(idx..);
                 }
+
+                stem.drain(0..3); // trim 'lib'
+
+                rlib_paths.push((stem, path));
             }
         }
     }
@@ -872,9 +875,9 @@ fn collect_deps_symbols(
 }
 
 fn collect_self_data(path: &path::Path, section_name: &str) -> Result<Data, Error> {
-    let data = &map_file(&path)?;
+    let data = &map_file(path)?;
 
-    let mut d = match binfarce::detect_format(&data) {
+    let mut d = match binfarce::detect_format(data) {
         Format::Elf32 { byte_order: _ } => collect_elf_data(path, data, section_name)?,
         Format::Elf64 { byte_order: _ } => collect_elf_data(path, data, section_name)?,
         Format::Macho => collect_macho_data(data)?,
@@ -950,13 +953,10 @@ fn collect_pdb_data(pdb_path: &path::Path, text_size: u64) -> Result<Data, Error
 
     let mut symbols = symbol_table.iter();
     while let Ok(Some(symbol)) = symbols.next() {
-        match symbol.parse() {
-            Ok(pdb::SymbolData::Public(data)) => {
-                if data.code || data.function {
-                    public_symbols.push((data.offset, data.name.to_string().into_owned()));
-                }
+        if let Ok(pdb::SymbolData::Public(data)) = symbol.parse() {
+            if data.code || data.function {
+                public_symbols.push((data.offset, data.name.to_string().into_owned()));
             }
-            _ => {}
         }
     }
 
@@ -1036,29 +1036,25 @@ fn collect_pdb_data(pdb_path: &path::Path, text_size: u64) -> Result<Data, Error
     let symbols = out_symbols
         .into_iter()
         .filter_map(|(address, size, unmangled_name, mangled_name)| {
-            if let Some(address) = address {
-                Some(SymbolData {
-                    name: mangled_name
-                        .map(|(_, mangled_name)| {
-                            binfarce::demangle::SymbolName::demangle(mangled_name)
-                        })
-                        // Assume the Symbol record name is unmangled if we didn't find one.
-                        // Note that unmangled names stored in PDB have a different format from
-                        // one stored in binaries itself. Specifically they do not include hash
-                        // and can have a bit different formatting.
-                        // We also assume that a Legacy mangling scheme were used.
-                        .unwrap_or_else(|| binfarce::demangle::SymbolName {
-                            complete: unmangled_name.clone(),
-                            trimmed: unmangled_name.clone(),
-                            crate_name: None,
-                            kind: binfarce::demangle::Kind::Legacy,
-                        }),
-                    address: address.0 as u64,
-                    size,
-                })
-            } else {
-                None
-            }
+            address.map(|address| SymbolData {
+                name: mangled_name
+                    .map(|(_, mangled_name)| {
+                        binfarce::demangle::SymbolName::demangle(mangled_name)
+                    })
+                    // Assume the Symbol record name is unmangled if we didn't find one.
+                    // Note that unmangled names stored in PDB have a different format from
+                    // one stored in binaries itself. Specifically they do not include hash
+                    // and can have a bit different formatting.
+                    // We also assume that a Legacy mangling scheme were used.
+                    .unwrap_or_else(|| binfarce::demangle::SymbolName {
+                        complete: unmangled_name.clone(),
+                        trimmed: unmangled_name.clone(),
+                        crate_name: None,
+                        kind: binfarce::demangle::Kind::Legacy,
+                    }),
+                address: address.0 as u64,
+                size,
+            })
         })
         .collect();
 
@@ -1080,7 +1076,7 @@ fn collect_pe_data(path: &path::Path, data: &[u8]) -> Result<Data, Error> {
         let pdb_path = {
             let file_name = if let Some(file_name) = path.file_name() {
                 if let Some(file_name) = file_name.to_str() {
-                    file_name.replace("-", "_")
+                    file_name.replace('-', "_")
                 } else {
                     return Err(Error::OpenFailed(path.to_owned()));
                 }
@@ -1156,13 +1152,13 @@ fn filter_methods(d: &mut CrateData, args: &Args) -> Methods {
         FilterBy::None
     };
 
-    let has_filter = if let FilterBy::None = filter { false } else { true };
+    let has_filter = !matches!(filter, FilterBy::None);
 
     let mut filter_out_size = 0;
     let mut filter_out_len = 0;
 
     for sym in dd.symbols.iter().rev() {
-        let (mut crate_name, is_exact) = crate_name::from_sym(&d, args, &sym.name);
+        let (mut crate_name, is_exact) = crate_name::from_sym(d, args, &sym.name);
 
         if !is_exact {
             crate_name.push('?');
@@ -1218,7 +1214,7 @@ fn filter_methods(d: &mut CrateData, args: &Args) -> Methods {
 
 fn print_methods_table(methods: Methods, data: &Data, term_width: Option<usize>) {
     let section_name = data.section_name.as_deref().unwrap_or(".text");
-    let mut table = Table::new(&["File", &section_name, "Size", "Crate", "Name"]);
+    let mut table = Table::new(&["File", section_name, "Size", "Crate", "Name"]);
     table.set_width(term_width);
 
     for method in &methods.methods {
@@ -1331,7 +1327,7 @@ fn print_methods_json(methods: &[Method], text_size: u64, file_size: u64) {
     let mut root = json::JsonValue::new_object();
     root["file-size"] = file_size.into();
     root["text-section-size"] = text_size.into();
-    root["functions"] = items.into();
+    root["functions"] = items;
 
     println!("{}", root.dump());
 }
@@ -1354,7 +1350,7 @@ fn filter_crates(d: &mut CrateData, args: &Args) -> Crates {
     let mut sizes = HashMap::new();
 
     for sym in dd.symbols.iter() {
-        let (crate_name, _) = crate_name::from_sym(&d, args, &sym.name);
+        let (crate_name, _) = crate_name::from_sym(d, args, &sym.name);
 
         if let Some(v) = sizes.get(&crate_name).cloned() {
             sizes.insert(crate_name.to_string(), v + sym.size);
@@ -1390,7 +1386,7 @@ fn filter_crates(d: &mut CrateData, args: &Args) -> Crates {
 
 fn print_crates_table(crates: Crates, data: &Data, term_width: Option<usize>) {
     let section_name = data.section_name.as_deref().unwrap_or(".text");
-    let mut table = Table::new(&["File", &section_name, "Size", "Crate"]);
+    let mut table = Table::new(&["File", section_name, "Size", "Crate"]);
     table.set_width(term_width);
 
     for item in &crates.crates {
@@ -1461,7 +1457,7 @@ fn print_crates_json(crates: &[Crate], text_size: u64, file_size: u64) {
     let mut root = json::JsonValue::new_object();
     root["file-size"] = file_size.into();
     root["text-section-size"] = text_size.into();
-    root["crates"] = items.into();
+    root["crates"] = items;
 
     println!("{}", root.dump());
 }

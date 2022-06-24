@@ -52,10 +52,10 @@ fn parse_sym(d: &CrateData, sym: &str) -> (String, bool) {
         // `crate_name1` can be empty in cases when it's just a type parameter, like:
         // <T as core::fmt::Display>::fmt::h92003a61120a7e1a
         if crate_name1.is_empty() {
-            crate_name2.clone()
+            crate_name2
         } else {
             if crate_name1 == crate_name2 {
-                crate_name1.clone()
+                crate_name1
             } else {
                 // This is an uncertain case.
                 //
@@ -69,28 +69,28 @@ fn parse_sym(d: &CrateData, sym: &str) -> (String, bool) {
 
                 if let Some(names) = d.deps_symbols.get_vec(sym) {
                     if names.contains(&crate_name1) {
-                        crate_name1.clone()
+                        crate_name1
                     } else if names.contains(&crate_name2) {
-                        crate_name2.clone()
+                        crate_name2
                     } else {
                         // Example:
                         // <std::collections::hash::map::DefaultHasher as core::hash::Hasher>::finish
                         // ["cc", "cc", "fern", "fern", "svgdom", "svgdom"]
 
                         is_exact = false;
-                        crate_name1.clone()
+                        crate_name1
                     }
                 } else {
                     // If the symbol is not in `deps_symbols` then it probably
                     // was imported/inlined to the crate bin itself.
 
                     is_exact = false;
-                    crate_name1.clone()
+                    crate_name1
                 }
             }
         }
     } else {
-        parse_crate_from_sym(&sym)
+        parse_crate_from_sym(sym)
     };
 
     (name, is_exact)
@@ -107,12 +107,12 @@ fn parse_crate_from_sym(sym: &str) -> String {
         sym.to_string()
     };
 
-    if crate_name.starts_with("<") {
-        while crate_name.starts_with("<") {
+    if crate_name.starts_with('<') {
+        while crate_name.starts_with('<') {
             crate_name.remove(0);
         }
 
-        while crate_name.starts_with("&") {
+        while crate_name.starts_with('&') {
             crate_name.remove(0);
         }
 
