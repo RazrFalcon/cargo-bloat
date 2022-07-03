@@ -19,6 +19,8 @@ use binfarce::elf64;
 use binfarce::macho;
 use binfarce::pe;
 
+use terminal_size::{terminal_size, Height, Width};
+
 mod crate_name;
 mod table;
 
@@ -198,7 +200,7 @@ fn main() {
     }
 
     let term_width = if !args.wide {
-        term_size::dimensions().map(|v| v.0)
+        terminal_size().map(|(Width(w), Height(_h))| w.into())
     } else {
         None
     };
