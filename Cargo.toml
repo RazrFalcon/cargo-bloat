@@ -9,6 +9,10 @@ readme = "README.md"
 license = "MIT"
 edition = "2018"
 
+[profile.release]
+strip = "debuginfo"
+lto = "thin"
+
 [dependencies]
 json = "0.12"
 memmap2 = "0.5"
