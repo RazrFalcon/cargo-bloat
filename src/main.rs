@@ -1234,13 +1234,15 @@ fn print_methods_table(methods: Methods, data: &Data, term_width: Option<usize>)
             data.symbols.len() - methods.methods.len()
         };
 
-        table.push(&[
-            format_percent(methods.filter_out_size as f64 / data.file_size as f64 * 100.0),
-            format_percent(methods.filter_out_size as f64 / data.text_size as f64 * 100.0),
-            format_size(methods.filter_out_size),
-            String::new(),
-            format!("And {} smaller methods. Use -n N to show more.", others_count),
-        ]);
+        if others_count != 0 {
+            table.push(&[
+                format_percent(methods.filter_out_size as f64 / data.file_size as f64 * 100.0),
+                format_percent(methods.filter_out_size as f64 / data.text_size as f64 * 100.0),
+                format_size(methods.filter_out_size),
+                String::new(),
+                format!("And {} smaller methods. Use -n N to show more.", others_count),
+            ]);
+        }
     }
 
     if methods.has_filter {
@@ -1285,11 +1287,13 @@ fn print_methods_table_no_relative(methods: Methods, data: &Data, term_width: Op
             data.symbols.len() - methods.methods.len()
         };
 
-        table.push(&[
-            format_size(methods.filter_out_size),
-            String::new(),
-            format!("And {} smaller methods. Use -n N to show more.", others_count),
-        ]);
+        if others_count != 0 {
+            table.push(&[
+                format_size(methods.filter_out_size),
+                String::new(),
+                format!("And {} smaller methods. Use -n N to show more.", others_count),
+            ]);
+        }
     }
 
     if methods.has_filter {
