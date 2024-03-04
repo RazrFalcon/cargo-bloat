@@ -159,7 +159,7 @@ fn main() {
 
     let mut args: Vec<_> = std::env::args_os().collect();
     args.remove(0); // file path
-    if args.get(0).and_then(|s| s.to_str()) == Some("bloat") {
+    if args.first().and_then(|s| s.to_str()) == Some("bloat") {
         args.remove(0);
     } else {
         eprintln!("Error: can be run only via `cargo bloat`.");
@@ -508,7 +508,7 @@ fn get_default_target() -> Result<String, Error> {
 }
 
 fn get_workspace_root() -> Result<String, Error> {
-    let output = Command::new("cargo").args(&["metadata"])
+    let output = Command::new("cargo").args(["metadata"])
         .output().map_err(|_| Error::CargoMetadataFailed)?;
 
     if !output.status.success() {
@@ -939,7 +939,7 @@ fn collect_macho_data(data: &[u8]) -> Result<Data, Error> {
 fn collect_pdb_data(pdb_path: &path::Path, text_size: u64) -> Result<Data, Error> {
     use pdb::FallibleIterator;
 
-    let file = fs::File::open(&pdb_path).map_err(|_| Error::OpenFailed(pdb_path.to_owned()))?;
+    let file = fs::File::open(pdb_path).map_err(|_| Error::OpenFailed(pdb_path.to_owned()))?;
     let mut pdb = pdb::PDB::open(file)?;
 
     let dbi = pdb.debug_information()?;
