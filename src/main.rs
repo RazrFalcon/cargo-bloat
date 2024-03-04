@@ -45,6 +45,7 @@ enum ArtifactKind {
     Binary,
     Library,
     DynLib,
+    ProcMacro,
 }
 
 #[derive(Debug)]
@@ -116,7 +117,7 @@ impl fmt::Display for Error {
                 write!(f, "failed to execute 'cargo build'. Probably a build error")
             }
             Error::UnsupportedCrateType => {
-                write!(f, "only 'bin', 'dylib' and 'cdylib' crate types are supported")
+                write!(f, "only 'bin', 'dylib', 'cdylib' and 'proc-macro' crate types are supported")
             }
             Error::OpenFailed(ref path) => {
                 write!(f, "failed to open a file '{}'", path.display())
@@ -601,6 +602,7 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
                         "bin" => ArtifactKind::Binary,
                         "lib" | "rlib" => ArtifactKind::Library,
                         "dylib" | "cdylib" => ArtifactKind::DynLib,
+                        "proc-macro" => ArtifactKind::ProcMacro,
                         _ => continue, // Simply ignore.
                     };
 
