@@ -786,7 +786,7 @@ fn get_cargo_args(args: &Args, json_output: bool) -> Vec<String> {
     }
 
     if let Some(ref config) = args.config {
-        list.push(format!("--config={}", config.to_string()));
+        list.push(format!("--config={}", config));
     }
 
     if let Some(ref target) = args.target {
