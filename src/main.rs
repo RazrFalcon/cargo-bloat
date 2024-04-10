@@ -283,6 +283,7 @@ OPTIONS:
         --all-features              Activate all available features
         --no-default-features       Do not activate the `default` feature
         --profile <PROFILE>         Build with the given profile.
+        --config <CONFIG>           Build with the given cargo config
         --target <TARGET>           Build for the target triple
         --target-dir <DIRECTORY>    Directory for all generated artifacts
         --frozen                    Require Cargo.lock and cache are up to date
@@ -329,6 +330,7 @@ pub struct Args {
     all_features: bool,
     no_default_features: bool,
     profile: Option<String>,
+    config: Option<String>,
     target: Option<String>,
     target_dir: Option<String>,
     frozen: bool,
@@ -364,6 +366,7 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
         all_features:           input.contains("--all-features"),
         no_default_features:    input.contains("--no-default-features"),
         profile:                input.opt_value_from_str("--profile")?,
+        config:                 input.opt_value_from_str("--config")?,
         target:                 input.opt_value_from_str("--target")?,
         target_dir:             input.opt_value_from_str("--target-dir")?,
         frozen:                 input.contains("--frozen"),
@@ -782,6 +785,9 @@ fn get_cargo_args(args: &Args, json_output: bool) -> Vec<String> {
         list.push(format!("--profile={}", profile));
     }
 
+    if let Some(ref config) = args.config {
+        list.push(format!("--config={}", config));
+    }
 
     if let Some(ref target) = args.target {
         list.push(format!("--target={}", target));
