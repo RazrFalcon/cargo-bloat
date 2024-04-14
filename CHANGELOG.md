@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Show the section name given to `--symbols-section` instead of hardcoding `.text`.
   Thanks to [@glandium](https://github.com/glandium).
 
+### Removed
+- The `--time` flag. Use `cargo --timings` instead.
+
 ## [0.11.1] - 2022-06-04
 ### Added
 - Mention `cargo --timings` when using `cargo bloat --time`.

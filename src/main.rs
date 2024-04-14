@@ -37,7 +37,6 @@ pub struct CrateData {
     std_crates: Vec<String>,
     dep_crates: Vec<String>,
     deps_symbols: MultiMap<String, String>, // symbol, crate
-    times: Vec<Elapsed>,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -52,13 +51,6 @@ struct Artifact {
     kind: ArtifactKind,
     name: String, // TODO: Rc?
     path: path::PathBuf,
-}
-
-#[derive(Clone)]
-struct Elapsed {
-    crate_name: String,
-    time: u64,
-    build_script: bool,
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -218,15 +210,6 @@ fn main() {
                                   crate_data.data.file_size);
             }
         }
-    } else if args.time {
-        match args.message_format {
-            MessageFormat::Table => {
-                print_times_table(crate_data.times, term_width);
-            }
-            MessageFormat::Json => {
-                print_times_json(crate_data.times);
-            }
-        }
     } else {
         let methods = filter_methods(&mut crate_data, &args);
         match args.message_format {
@@ -249,16 +232,6 @@ fn main() {
             println!();
             println!("Note: numbers above are a result of guesswork. \
                       They are not 100% correct and never will be.");
-        }
-
-        if args.time {
-            println!();
-            println!("Note: prefer using `cargo --timings`.");
-        }
-
-        if args.time && args.jobs != Some(1) {
-            println!();
-            println!("Note: prefer using `-j 1` argument to disable a multithreaded build.");
         }
 
         if crate_data.data.symbols.len() < 10 {
@@ -296,7 +269,6 @@ OPTIONS:
         --locked                    Require Cargo.lock is up to date
     -Z <FLAG>...                    Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
         --crates                    Per crate bloatedness
-        --time                      Per crate build time. Will run `cargo clean` first
         --filter <CRATE|REGEXP>     Filter functions by crate
         --split-std                 Split the 'std' crate to original crates like core, alloc, etc.
         --symbols-section <NAME>    Use custom symbols section (ELF-only) [default: .text]
@@ -343,7 +315,6 @@ pub struct Args {
     locked: bool,
     unstable: Vec<String>,
     crates: bool,
-    time: bool,
     filter: Option<String>,
     split_std: bool,
     symbols_section: Option<String>,
@@ -379,7 +350,6 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
         locked:                 input.contains("--locked"),
         unstable:               input.values_from_str("-Z")?,
         crates:                 input.contains("--crates"),
-        time:                   input.contains("--time"),
         filter:                 input.opt_value_from_str("--filter")?,
         split_std:              input.contains("--split-std"),
         symbols_section:        input.opt_value_from_str("--symbols-section")?,
@@ -545,40 +515,10 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     let default_target = get_default_target()?;
     let target_triple = args.target.clone().unwrap_or(default_target);
 
-    let child = if args.time {
-        // To collect the build times we have to clean the repo first.
-        cargo_clean(args.release);
-
-        Command::new("cargo")
-            .args(&get_cargo_args(args, true))
-            .env("RUSTC_WRAPPER", "cargo-bloat")
-            .stdout(std::process::Stdio::piped())
-            // Hide cargo output, because we are using stderr to track build time.
-            .stderr(std::process::Stdio::piped())
-            .spawn().map_err(|_| Error::CargoBuildFailed)?
-    } else {
-        // Run `cargo build` without json output first, so we could print build errors.
-        {
-            let cmd = &mut Command::new("cargo");
-            cmd.args(&get_cargo_args(args, false));
-
-            // When targeting MSVC, symbols data will be stored in PDB files.
-            // But unlike other targets, the Release build would not have any useful information.
-            // Therefore we have to force debug info in Release mode for MSVC target.
-            if args.release && target_triple.contains("msvc") {
-                cmd.env("CARGO_PROFILE_RELEASE_DEBUG", "true");
-            }
-
-            cmd.spawn().map_err(|_| Error::CargoBuildFailed)?
-                .wait().map_err(|_| Error::CargoBuildFailed)?;
-        }
-
-        // Run `cargo build` with json output and collect it.
-        // This would not cause a rebuild.
+    // Run `cargo build` without json output first, so we could print build errors.
+    {
         let cmd = &mut Command::new("cargo");
-        cmd.args(&get_cargo_args(args, true));
-        cmd.stdout(std::process::Stdio::piped());
-        cmd.stderr(std::process::Stdio::null());
+        cmd.args(&get_cargo_args(args, false));
 
         // When targeting MSVC, symbols data will be stored in PDB files.
         // But unlike other targets, the Release build would not have any useful information.
@@ -588,7 +528,24 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
         }
 
         cmd.spawn().map_err(|_| Error::CargoBuildFailed)?
-    };
+            .wait().map_err(|_| Error::CargoBuildFailed)?;
+    }
+
+    // Run `cargo build` with json output and collect it.
+    // This would not cause a rebuild.
+    let cmd = &mut Command::new("cargo");
+    cmd.args(&get_cargo_args(args, true));
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::null());
+
+    // When targeting MSVC, symbols data will be stored in PDB files.
+    // But unlike other targets, the Release build would not have any useful information.
+    // Therefore we have to force debug info in Release mode for MSVC target.
+    if args.release && target_triple.contains("msvc") {
+        cmd.env("CARGO_PROFILE_RELEASE_DEBUG", "true");
+    }
+
+    let child = cmd.spawn().map_err(|_| Error::CargoBuildFailed)?;
 
     let output = child.wait_with_output().map_err(|_| Error::CargoBuildFailed)?;
     if !output.status.success() {
@@ -596,7 +553,6 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     }
 
     let stdout = str::from_utf8(&output.stdout).unwrap();
-    let stderr = str::from_utf8(&output.stderr).unwrap();
 
     let mut artifacts = Vec::new();
     for line in stdout.lines() {
@@ -625,56 +581,8 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
         }
     }
 
-    let mut times = Vec::new();
-    if args.time {
-        for line in stderr.lines() {
-            if !line.starts_with("json-time {") {
-                continue;
-            }
-
-            // Try to parse wrapper output first.
-            let value = json::parse(&line[10..]).unwrap();
-
-            times.push(Elapsed {
-                crate_name: value["crate_name"].as_str().unwrap().to_string(),
-                time: value["time"].as_u64().unwrap(),
-                build_script: value["build_script"].as_bool().unwrap(),
-            });
-        }
-    }
-
-    // Merge build script times into crate build times.
-    while let Some(idx) = times.iter().position(|t| t.build_script) {
-        let script_name = times[idx].crate_name.clone();
-        let script_time = times[idx].time;
-
-        for time in &mut times {
-            if time.crate_name == script_name && !time.build_script {
-                time.time += script_time;
-            }
-        }
-
-        times.remove(idx);
-    }
-
     if artifacts.is_empty() {
         return Err(Error::NoArtifacts);
-    }
-
-    if args.time && !args.crates {
-        // Clean target again, because cargo will cache RUSTC_WRAPPER,
-        // which is not what we want.
-        cargo_clean(args.release);
-
-        // We don't care about symbols if we only plan to print the build times.
-        return Ok(CrateData {
-            exe_path: None,
-            data: Data { symbols: Vec::new(), file_size: 0, text_size: 0, section_name: None },
-            std_crates: Vec::new(),
-            dep_crates: Vec::new(),
-            deps_symbols: MultiMap::new(),
-            times,
-        });
     }
 
     let mut rlib_paths = Vec::new();
@@ -731,7 +639,6 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
                 std_crates,
                 dep_crates,
                 deps_symbols,
-                times,
             });
         }
     }
@@ -820,22 +727,6 @@ fn get_cargo_args(args: &Args, json_output: bool) -> Vec<String> {
     }
 
     list
-}
-
-fn cargo_clean(release: bool) {
-    let clean_args = if release {
-        // Remove only `target/release` in the release mode.
-        vec!["clean", "--release"]
-    } else {
-        // We can't remove only `target/debug` in debug mode yet.
-        // See https://github.com/rust-lang/cargo/pull/6989
-        vec!["clean"]
-    };
-
-    // No need to check the output status.
-    let _ = Command::new("cargo")
-        .args(&clean_args)
-        .output();
 }
 
 fn collect_rlib_paths(deps_dir: &path::Path) -> Vec<(String, path::PathBuf)> {
@@ -1478,34 +1369,6 @@ fn print_crates_json(crates: &[Crate], text_size: u64, file_size: u64) {
     println!("{}", root.dump());
 }
 
-fn print_times_table(mut times: Vec<Elapsed>, term_width: Option<usize>) {
-    let mut table = Table::new(&["Time", "Crate"]);
-    table.set_width(term_width);
-
-    times.sort_by(|a, b| b.time.cmp(&a.time));
-
-    for time in times {
-        table.push(&[format_time(time.time), time.crate_name]);
-    }
-
-    print!("{}", table);
-}
-
-fn print_times_json(mut times: Vec<Elapsed>) {
-    times.sort_by(|a, b| b.time.cmp(&a.time));
-
-    let mut items = json::JsonValue::new_array();
-    for time in times {
-        let mut map = json::JsonValue::new_object();
-        map["crate"] = time.crate_name.clone().into();
-        map["time"] = format_time(time.time).into();
-
-        items.push(map).unwrap();
-    }
-
-    println!("{}", items.dump());
-}
-
 fn format_percent(n: f64) -> String {
     format!("{:.1}%", n)
 }
@@ -1521,8 +1384,4 @@ fn format_size(bytes: u64) -> String {
     } else {
         format!("{}B", bytes)
     }
-}
-
-fn format_time(ns: u64) -> String {
-    format!("{:.2}s", ns as f64 / 1_000_000_000.0)
 }
