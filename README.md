@@ -91,31 +91,9 @@ File .text    Size Crate Name
 0.5%  3.6% 13.5KiB       filtered data size, the file size is 2.8MiB
 ```
 
-Get a list of crates that took longest to compile:
-
-```
-% cargo bloat --time -j 1
- Time Crate
-1.42s pdb
-1.37s regex_syntax
-1.11s cargo_bloat
-0.96s regex
-0.58s binfarce
-0.54s json
-0.45s libc
-0.22s uuid
-0.20s fallible_iterator
-0.19s pico_args
-0.18s scroll
-0.12s memmap2
-0.09s multimap
-0.06s term_size
-```
-
 Flags specific for `cargo-bloat`:
 ```
     --crates                   Per crate bloatedness
-    --time                     Per crate build time. Will run `cargo clean` first
     --filter <CRATE|REGEXP>    Filter functions by crate
     --split-std                Split the 'std' crate to original crates like core, alloc, etc.
     --no-relative-size         Hide 'File' and '.text' columns

@@ -19,7 +19,7 @@ checksum = "18464ccbb85e5dede30d70cc7676dc9950a0fb7dbf595a43d765be9123c616a2"
 
 [[package]]
 name = "cargo-bloat"
-version = "0.11.1"
+version = "0.12.0"
 dependencies = [
  "binfarce",
  "json",
