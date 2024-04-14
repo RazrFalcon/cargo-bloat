@@ -1,23 +1,23 @@
 #![allow(clippy::collapsible_if)]
 #![allow(clippy::collapsible_else_if)]
 
-use std::{fs, fmt, path, str};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::process::{self, Command};
+use std::{fmt, fs, path, str};
 
 use multimap::MultiMap;
 
 use json::object;
 
 use binfarce::ar;
-use binfarce::ByteOrder;
-use binfarce::Format;
 use binfarce::demangle::SymbolData;
 use binfarce::elf32;
 use binfarce::elf64;
 use binfarce::macho;
 use binfarce::pe;
+use binfarce::ByteOrder;
+use binfarce::Format;
 
 mod crate_name;
 mod table;
@@ -92,8 +92,11 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::StdDirNotFound(ref path) => {
-                write!(f, "failed to find a dir with std libraries. Expected location: {}",
-                       path.display())
+                write!(
+                    f,
+                    "failed to find a dir with std libraries. Expected location: {}",
+                    path.display()
+                )
             }
             Error::RustcFailed => {
                 write!(f, "failed to execute 'rustc'. It should be in the PATH")
@@ -108,7 +111,10 @@ impl fmt::Display for Error {
                 write!(f, "failed to execute 'cargo build'. Probably a build error")
             }
             Error::UnsupportedCrateType => {
-                write!(f, "only 'bin', 'dylib' and 'cdylib' crate types are supported")
+                write!(
+                    f,
+                    "only 'bin', 'dylib' and 'cdylib' crate types are supported"
+                )
             }
             Error::OpenFailed(ref path) => {
                 write!(f, "failed to open a file '{}'", path.display())
@@ -133,7 +139,6 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
-
 
 fn main() {
     if let Ok(wrap) = std::env::var("RUSTC_WRAPPER") {
@@ -206,8 +211,11 @@ fn main() {
                 }
             }
             MessageFormat::Json => {
-                print_crates_json(&crates.crates, crate_data.data.text_size,
-                                  crate_data.data.file_size);
+                print_crates_json(
+                    &crates.crates,
+                    crate_data.data.text_size,
+                    crate_data.data.file_size,
+                );
             }
         }
     } else {
@@ -221,8 +229,11 @@ fn main() {
                 }
             }
             MessageFormat::Json => {
-                print_methods_json(&methods.methods, crate_data.data.text_size,
-                                   crate_data.data.file_size);
+                print_methods_json(
+                    &methods.methods,
+                    crate_data.data.text_size,
+                    crate_data.data.file_size,
+                );
             }
         }
     }
@@ -230,14 +241,18 @@ fn main() {
     if args.message_format == MessageFormat::Table {
         if args.crates {
             println!();
-            println!("Note: numbers above are a result of guesswork. \
-                      They are not 100% correct and never will be.");
+            println!(
+                "Note: numbers above are a result of guesswork. \
+                      They are not 100% correct and never will be."
+            );
         }
 
         if crate_data.data.symbols.len() < 10 {
             println!();
-            println!("Warning: it seems like the `.text` section is nearly empty. \
-                      Try removing `strip = true` from Cargo.toml");
+            println!(
+                "Warning: it seems like the `.text` section is nearly empty. \
+                      Try removing `strip = true` from Cargo.toml"
+            );
         }
     }
 }
@@ -293,7 +308,6 @@ fn parse_message_format(s: &str) -> Result<MessageFormat, &'static str> {
     }
 }
 
-
 pub struct Args {
     help: bool,
     version: bool,
@@ -330,37 +344,38 @@ pub struct Args {
 fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Error> {
     let mut input = pico_args::Arguments::from_vec(raw_args);
     let args = Args {
-        help:                   input.contains(["-h", "--help"]),
-        version:                input.contains(["-V", "--version"]),
-        lib:                    input.contains("--lib"),
-        bin:                    input.opt_value_from_str("--bin")?,
-        example:                input.opt_value_from_str("--example")?,
-        test:                   input.opt_value_from_str("--test")?,
-        package:                input.opt_value_from_str(["-p", "--package"])?,
-        release:                input.contains("--release"),
-        jobs:                   input.opt_value_from_str(["-j", "--jobs"])?,
-        features:               input.opt_value_from_str("--features")?,
-        all_features:           input.contains("--all-features"),
-        no_default_features:    input.contains("--no-default-features"),
-        profile:                input.opt_value_from_str("--profile")?,
-        config:                 input.opt_value_from_str("--config")?,
-        target:                 input.opt_value_from_str("--target")?,
-        target_dir:             input.opt_value_from_str("--target-dir")?,
-        frozen:                 input.contains("--frozen"),
-        locked:                 input.contains("--locked"),
-        unstable:               input.values_from_str("-Z")?,
-        crates:                 input.contains("--crates"),
-        filter:                 input.opt_value_from_str("--filter")?,
-        split_std:              input.contains("--split-std"),
-        symbols_section:        input.opt_value_from_str("--symbols-section")?,
-        no_relative_size:       input.contains("--no-relative-size"),
-        full_fn:                input.contains("--full-fn"),
-        n:                      input.opt_value_from_str("-n")?.unwrap_or(20),
-        wide:                   input.contains(["-w", "--wide"]),
-        verbose:                input.contains(["-v", "--verbose"]),
-        manifest_path:          input.opt_value_from_str("--manifest-path")?,
-        message_format:         input.opt_value_from_fn("--message-format", parse_message_format)?
-                                     .unwrap_or(MessageFormat::Table),
+        help: input.contains(["-h", "--help"]),
+        version: input.contains(["-V", "--version"]),
+        lib: input.contains("--lib"),
+        bin: input.opt_value_from_str("--bin")?,
+        example: input.opt_value_from_str("--example")?,
+        test: input.opt_value_from_str("--test")?,
+        package: input.opt_value_from_str(["-p", "--package"])?,
+        release: input.contains("--release"),
+        jobs: input.opt_value_from_str(["-j", "--jobs"])?,
+        features: input.opt_value_from_str("--features")?,
+        all_features: input.contains("--all-features"),
+        no_default_features: input.contains("--no-default-features"),
+        profile: input.opt_value_from_str("--profile")?,
+        config: input.opt_value_from_str("--config")?,
+        target: input.opt_value_from_str("--target")?,
+        target_dir: input.opt_value_from_str("--target-dir")?,
+        frozen: input.contains("--frozen"),
+        locked: input.contains("--locked"),
+        unstable: input.values_from_str("-Z")?,
+        crates: input.contains("--crates"),
+        filter: input.opt_value_from_str("--filter")?,
+        split_std: input.contains("--split-std"),
+        symbols_section: input.opt_value_from_str("--symbols-section")?,
+        no_relative_size: input.contains("--no-relative-size"),
+        full_fn: input.contains("--full-fn"),
+        n: input.opt_value_from_str("-n")?.unwrap_or(20),
+        wide: input.contains(["-w", "--wide"]),
+        verbose: input.contains(["-v", "--verbose"]),
+        manifest_path: input.opt_value_from_str("--manifest-path")?,
+        message_format: input
+            .opt_value_from_fn("--message-format", parse_message_format)?
+            .unwrap_or(MessageFormat::Table),
     };
 
     let remaining = input.finish();
@@ -426,11 +441,15 @@ fn wrapper_mode(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     // TODO: the same crates but with different versions?
 
     // `cargo` will ignore raw JSON, so we have to use a prefix
-    eprintln!("json-time {}", object!{
-        "crate_name" => crate_name,
-        "time" => time_ns,
-        "build_script" => build_script
-    }.dump());
+    eprintln!(
+        "json-time {}",
+        object! {
+            "crate_name" => crate_name,
+            "time" => time_ns,
+            "build_script" => build_script
+        }
+        .dump()
+    );
 
     Ok(())
 }
@@ -441,8 +460,7 @@ fn stdlibs_dir(target_triple: &str) -> Result<path::PathBuf, Error> {
     // variable.
     // See https://github.com/rust-lang/cargo/blob/69aea5b6f69add7c51cca939a79644080c0b0ba0
     // /src/cargo/core/compiler/build_context/target_info.rs#L434-L441
-    let rustflags = std::env::var("RUSTFLAGS")
-        .unwrap_or_else(|_| String::new());
+    let rustflags = std::env::var("RUSTFLAGS").unwrap_or_else(|_| String::new());
 
     let rustflags = rustflags
         .split(' ')
@@ -452,7 +470,8 @@ fn stdlibs_dir(target_triple: &str) -> Result<path::PathBuf, Error> {
 
     let output = Command::new("rustc")
         .args(rustflags)
-        .arg("--print=sysroot").output()
+        .arg("--print=sysroot")
+        .output()
         .map_err(|_| Error::RustcFailed)?;
 
     let stdout = str::from_utf8(&output.stdout).unwrap();
@@ -474,12 +493,15 @@ fn stdlibs_dir(target_triple: &str) -> Result<path::PathBuf, Error> {
 }
 
 fn get_default_target() -> Result<String, Error> {
-    let output = Command::new("rustc").arg("-Vv").output().map_err(|_| Error::RustcFailed)?;
+    let output = Command::new("rustc")
+        .arg("-Vv")
+        .output()
+        .map_err(|_| Error::RustcFailed)?;
 
     let stdout = str::from_utf8(&output.stdout).unwrap();
     for line in stdout.lines() {
         if line.starts_with("host:") {
-            return Ok(line[6..].to_owned())
+            return Ok(line[6..].to_owned());
         }
     }
 
@@ -487,8 +509,10 @@ fn get_default_target() -> Result<String, Error> {
 }
 
 fn get_workspace_root() -> Result<String, Error> {
-    let output = Command::new("cargo").args(["metadata"])
-        .output().map_err(|_| Error::CargoMetadataFailed)?;
+    let output = Command::new("cargo")
+        .args(["metadata"])
+        .output()
+        .map_err(|_| Error::CargoMetadataFailed)?;
 
     if !output.status.success() {
         let mut msg = str::from_utf8(&output.stderr).unwrap().trim();
@@ -502,7 +526,9 @@ fn get_workspace_root() -> Result<String, Error> {
     let stdout = str::from_utf8(&output.stdout).unwrap();
     if let Some(line) = stdout.lines().next() {
         let meta = json::parse(line).map_err(|_| Error::InvalidCargoOutput)?;
-        let root = meta["workspace_root"].as_str().ok_or(Error::InvalidCargoOutput)?;
+        let root = meta["workspace_root"]
+            .as_str()
+            .ok_or(Error::InvalidCargoOutput)?;
         return Ok(root.to_string());
     }
 
@@ -527,8 +553,10 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
             cmd.env("CARGO_PROFILE_RELEASE_DEBUG", "true");
         }
 
-        cmd.spawn().map_err(|_| Error::CargoBuildFailed)?
-            .wait().map_err(|_| Error::CargoBuildFailed)?;
+        cmd.spawn()
+            .map_err(|_| Error::CargoBuildFailed)?
+            .wait()
+            .map_err(|_| Error::CargoBuildFailed)?;
     }
 
     // Run `cargo build` with json output and collect it.
@@ -547,7 +575,9 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
 
     let child = cmd.spawn().map_err(|_| Error::CargoBuildFailed)?;
 
-    let output = child.wait_with_output().map_err(|_| Error::CargoBuildFailed)?;
+    let output = child
+        .wait_with_output()
+        .map_err(|_| Error::CargoBuildFailed)?;
     if !output.status.success() {
         return Err(Error::CargoBuildFailed);
     }
@@ -626,7 +656,11 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     let deps_symbols = collect_deps_symbols(rlib_paths)?;
 
     let prepare_path = |path: &path::Path| {
-        path.strip_prefix(workspace_root).unwrap_or(path).to_str().unwrap().to_string()
+        path.strip_prefix(workspace_root)
+            .unwrap_or(path)
+            .to_str()
+            .unwrap()
+            .to_string()
     };
 
     // The last artifact should be our binary/dylib/cdylib.
@@ -676,7 +710,6 @@ fn get_cargo_args(args: &Args, json_output: bool) -> Vec<String> {
     if args.all_features {
         list.push("--all-features".to_string());
     } else {
-
         if args.no_default_features {
             list.push("--no-default-features".to_string());
         }
@@ -754,12 +787,13 @@ fn collect_rlib_paths(deps_dir: &path::Path) -> Vec<(String, path::PathBuf)> {
 
 fn map_file(path: &path::Path) -> Result<memmap2::Mmap, Error> {
     let file = fs::File::open(path).map_err(|_| Error::OpenFailed(path.to_owned()))?;
-    let file = unsafe { memmap2::Mmap::map(&file).map_err(|_| Error::OpenFailed(path.to_owned()))? };
+    let file =
+        unsafe { memmap2::Mmap::map(&file).map_err(|_| Error::OpenFailed(path.to_owned()))? };
     Ok(file)
 }
 
 fn collect_deps_symbols(
-    libs: Vec<(String, path::PathBuf)>
+    libs: Vec<(String, path::PathBuf)>,
 ) -> Result<MultiMap<String, String>, Error> {
     let mut map = MultiMap::new();
 
@@ -941,9 +975,7 @@ fn collect_pdb_data(pdb_path: &path::Path, text_size: u64) -> Result<Data, Error
         .filter_map(|(address, size, unmangled_name, mangled_name)| {
             address.map(|address| SymbolData {
                 name: mangled_name
-                    .map(|(_, mangled_name)| {
-                        binfarce::demangle::SymbolName::demangle(mangled_name)
-                    })
+                    .map(|(_, mangled_name)| binfarce::demangle::SymbolName::demangle(mangled_name))
                     // Assume the Symbol record name is unmangled if we didn't find one.
                     // Note that unmangled names stored in PDB have a different format from
                     // one stored in binaries itself. Specifically they do not include hash
@@ -1017,7 +1049,11 @@ fn filter_methods(d: &mut CrateData, args: &Args) -> Methods {
     d.data.symbols.sort_by_key(|v| v.size);
 
     let dd = &d.data;
-    let n = if args.n == 0 { dd.symbols.len() } else { args.n };
+    let n = if args.n == 0 {
+        dd.symbols.len()
+    } else {
+        args.n
+    };
 
     let mut methods = Vec::with_capacity(n);
 
@@ -1039,8 +1075,10 @@ fn filter_methods(d: &mut CrateData, args: &Args) -> Methods {
                 match regex::Regex::new(text) {
                     Ok(re) => FilterBy::Regex(re),
                     Err(_) => {
-                        eprintln!("Warning: the filter value contains an unknown crate \
-                                   or an invalid regexp. Ignored.");
+                        eprintln!(
+                            "Warning: the filter value contains an unknown crate \
+                                   or an invalid regexp. Ignored."
+                        );
                         FilterBy::None
                     }
                 }
@@ -1143,7 +1181,10 @@ fn print_methods_table(methods: Methods, data: &Data, term_width: Option<usize>)
                 format_percent(methods.filter_out_size as f64 / data.text_size as f64 * 100.0),
                 format_size(methods.filter_out_size),
                 String::new(),
-                format!("And {} smaller methods. Use -n N to show more.", others_count),
+                format!(
+                    "And {} smaller methods. Use -n N to show more.",
+                    others_count
+                ),
             ]);
         }
     }
@@ -1156,7 +1197,10 @@ fn print_methods_table(methods: Methods, data: &Data, term_width: Option<usize>)
             format_percent(total as f64 / data.text_size as f64 * 100.0),
             format_size(total),
             String::new(),
-            format!("filtered data size, the file size is {}", format_size(data.file_size)),
+            format!(
+                "filtered data size, the file size is {}",
+                format_size(data.file_size)
+            ),
         ]);
     } else {
         table.push(&[
@@ -1164,7 +1208,11 @@ fn print_methods_table(methods: Methods, data: &Data, term_width: Option<usize>)
             format_percent(100.0),
             format_size(data.text_size),
             String::new(),
-            format!("{} section size, the file size is {}", section_name, format_size(data.file_size)),
+            format!(
+                "{} section size, the file size is {}",
+                section_name,
+                format_size(data.file_size)
+            ),
         ]);
     }
 
@@ -1194,7 +1242,10 @@ fn print_methods_table_no_relative(methods: Methods, data: &Data, term_width: Op
             table.push(&[
                 format_size(methods.filter_out_size),
                 String::new(),
-                format!("And {} smaller methods. Use -n N to show more.", others_count),
+                format!(
+                    "And {} smaller methods. Use -n N to show more.",
+                    others_count
+                ),
             ]);
         }
     }
@@ -1205,13 +1256,19 @@ fn print_methods_table_no_relative(methods: Methods, data: &Data, term_width: Op
         table.push(&[
             format_size(total),
             String::new(),
-            format!("filtered data size, the file size is {}", format_size(data.file_size)),
+            format!(
+                "filtered data size, the file size is {}",
+                format_size(data.file_size)
+            ),
         ]);
     } else {
         table.push(&[
             format_size(data.text_size),
             String::new(),
-            format!(".text section size, the file size is {}", format_size(data.file_size)),
+            format!(
+                ".text section size, the file size is {}",
+                format_size(data.file_size)
+            ),
         ]);
     }
 
@@ -1310,7 +1367,10 @@ fn print_crates_table(crates: Crates, data: &Data, term_width: Option<usize>) {
             format_percent(crates.filter_out_size as f64 / data.file_size as f64 * 100.0),
             format_percent(crates.filter_out_size as f64 / data.text_size as f64 * 100.0),
             format_size(crates.filter_out_size),
-            format!("And {} more crates. Use -n N to show more.", crates.filter_out_len),
+            format!(
+                "And {} more crates. Use -n N to show more.",
+                crates.filter_out_len
+            ),
         ]);
     }
 
@@ -1318,7 +1378,11 @@ fn print_crates_table(crates: Crates, data: &Data, term_width: Option<usize>) {
         format_percent(data.text_size as f64 / data.file_size as f64 * 100.0),
         format_percent(100.0),
         format_size(data.text_size),
-        format!("{} section size, the file size is {}", section_name, format_size(data.file_size)),
+        format!(
+            "{} section size, the file size is {}",
+            section_name,
+            format_size(data.file_size)
+        ),
     ]);
 
     print!("{}", table);
@@ -1329,23 +1393,27 @@ fn print_crates_table_no_relative(crates: Crates, data: &Data, term_width: Optio
     table.set_width(term_width);
 
     for item in &crates.crates {
-        table.push(&[
-            format_size(item.size),
-            item.name.clone(),
-        ]);
+        table.push(&[format_size(item.size), item.name.clone()]);
     }
 
     if crates.filter_out_len != 0 {
         table.push(&[
             format_size(crates.filter_out_size),
-            format!("And {} more crates. Use -n N to show more.", crates.filter_out_len),
+            format!(
+                "And {} more crates. Use -n N to show more.",
+                crates.filter_out_len
+            ),
         ]);
     }
 
     let section_name = data.section_name.as_deref().unwrap_or(".text");
     table.push(&[
         format_size(data.text_size),
-        format!("{} section size, the file size is {}", section_name, format_size(data.file_size)),
+        format!(
+            "{} section size, the file size is {}",
+            section_name,
+            format_size(data.file_size)
+        ),
     ]);
 
     print!("{}", table);

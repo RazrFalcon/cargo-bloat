@@ -57,7 +57,7 @@ impl fmt::Display for Table {
 
         let mut row = 0;
         while row < rows {
-            let row_data = &self.data[row * self.columns_count .. (row + 1) * self.columns_count];
+            let row_data = &self.data[row * self.columns_count..(row + 1) * self.columns_count];
 
             for (col, cell) in row_data.iter().enumerate() {
                 if col != self.columns_count - 1 {

@@ -1,4 +1,4 @@
-use crate::{CrateData, Args};
+use crate::{Args, CrateData};
 use binfarce::demangle::{self, SymbolName};
 
 pub const UNKNOWN: &str = "[Unknown]";
@@ -21,18 +21,12 @@ fn from_sym_impl(d: &CrateData, sym: &SymbolName) -> (String, bool) {
     }
 
     match sym.kind {
-        demangle::Kind::Legacy => {
-            parse_sym(d, &sym.complete)
-        }
-        demangle::Kind::V0 => {
-            match sym.crate_name {
-                Some(ref name) => (name.to_string(), true),
-                None => parse_sym_v0(d, &sym.trimmed),
-            }
-        }
-        demangle::Kind::Unknown => {
-            (UNKNOWN.to_string(), true)
-        }
+        demangle::Kind::Legacy => parse_sym(d, &sym.complete),
+        demangle::Kind::V0 => match sym.crate_name {
+            Some(ref name) => (name.to_string(), true),
+            None => parse_sym_v0(d, &sym.trimmed),
+        },
+        demangle::Kind::Unknown => (UNKNOWN.to_string(), true),
     }
 }
 
