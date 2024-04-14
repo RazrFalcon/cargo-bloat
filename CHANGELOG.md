@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - The `--config` flag. That matches the `cargo build --config`.
   Thanks to [@anthonydandrea](https://github.com/anthonydandrea).
+- Warn about `strip = true`.
 
 ### Changed
 - Do not show the `-n option` if there is nothing more to display.

@@ -260,6 +260,12 @@ fn main() {
             println!();
             println!("Note: prefer using `-j 1` argument to disable a multithreaded build.");
         }
+
+        if crate_data.data.symbols.len() < 10 {
+            println!();
+            println!("Warning: it seems like the `.text` section is nearly empty. \
+                      Try removing `strip = true` from Cargo.toml");
+        }
     }
 }
 
