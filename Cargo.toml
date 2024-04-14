@@ -15,12 +15,12 @@ lto = "thin"
 
 [dependencies]
 json = "0.12"
-memmap2 = "0.5"
-multimap = { version = "0.8", default-features = false }
+memmap2 = "0.9"
+multimap = { version = "0.10", default-features = false }
 pico-args = { version = "0.5.0", features = ["eq-separator", "short-space-opt"]}
 term_size = "0.3.1"
 binfarce = "0.2.1"
-pdb = "0.7.0"
+pdb = "0.8.0"
 
 [dependencies.regex]
 version = "1.3"

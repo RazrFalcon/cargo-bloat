@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Added
+- The `--config` flag. That matches the `cargo build --config`.
+  Thanks to [@anthonydandrea](https://github.com/anthonydandrea).
+
+### Changed
+- Do not show the `-n option` if there is nothing more to display.
+  Thanks to [@spineki](https://github.com/spineki).
+- Use `thin` LTO in the Release build to reduce the installed binary size.
+  Thanks to [@LingMan](https://github.com/LingMan).
+- Show the section name given to `--symbols-section` instead of hardcoding `.text`.
+  Thanks to [@glandium](https://github.com/glandium).
 
 ## [0.11.1] - 2022-06-04
 ### Added
