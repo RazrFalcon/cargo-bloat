@@ -681,16 +681,23 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     Err(Error::UnsupportedCrateType)
 }
 
-fn get_cargo_envs(args: &Args, target_triple: &str)
-                  -> Vec<(impl AsRef<OsStr>, impl AsRef<OsStr>)> {
+fn get_cargo_envs(
+    args: &Args,
+    target_triple: &str
+) -> Vec<(impl AsRef<OsStr>, impl AsRef<OsStr>)> {
     let mut list = Vec::new();
 
     let profile = args.get_profile()
         .to_ascii_uppercase()
         .replace('-', "_");
 
-    // When targeting MSVC, symbols data will be stored in PDB files,
-    // so always generate debug info
+    // No matter which profile we are building for, never strip the binary
+    // because we need the symbols.
+    list.push((format!("CARGO_PROFILE_{}_STRIP", profile), "false"));
+
+    // When targeting MSVC, symbols data will be stored in PDB files.
+    // Because of that, the Release build would not have any useful information
+    // even if not stripped. Therefore, force the debug info for MSVC target.
     if target_triple.contains("msvc") {
         list.push((format!("CARGO_PROFILE_{}_DEBUG", profile), "true"));
     }
