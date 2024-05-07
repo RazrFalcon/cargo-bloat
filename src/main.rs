@@ -544,7 +544,7 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     // Run `cargo build` without json output first, so we could print build errors.
     {
         let cmd = &mut Command::new("cargo");
-        cmd.args(&get_cargo_args(args, false));
+        cmd.args(get_cargo_args(args, false));
 
         // When targeting MSVC, symbols data will be stored in PDB files.
         // But unlike other targets, the Release build would not have any useful information.
@@ -562,7 +562,7 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     // Run `cargo build` with json output and collect it.
     // This would not cause a rebuild.
     let cmd = &mut Command::new("cargo");
-    cmd.args(&get_cargo_args(args, true));
+    cmd.args(get_cargo_args(args, true));
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::null());
 
