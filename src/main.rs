@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::process::{self, Command};
 use std::{fmt, fs, path, str};
+use std::ffi::OsStr;
 
 use multimap::MultiMap;
 
@@ -386,6 +387,18 @@ fn parse_args(raw_args: Vec<std::ffi::OsString>) -> Result<Args, pico_args::Erro
     Ok(args)
 }
 
+impl Args {
+    fn get_profile(&self) -> &str {
+        if let Some(profile) = &self.profile {
+            profile
+        } else if self.release {
+            "release"
+        } else {
+            "dev"
+        }
+    }
+}
+
 fn wrapper_mode(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let start = std::time::Instant::now();
 
@@ -544,14 +557,8 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     // Run `cargo build` without json output first, so we could print build errors.
     {
         let cmd = &mut Command::new("cargo");
-        cmd.args(&get_cargo_args(args, false));
-
-        // When targeting MSVC, symbols data will be stored in PDB files.
-        // But unlike other targets, the Release build would not have any useful information.
-        // Therefore we have to force debug info in Release mode for MSVC target.
-        if args.release && target_triple.contains("msvc") {
-            cmd.env("CARGO_PROFILE_RELEASE_DEBUG", "true");
-        }
+        cmd.args(get_cargo_args(args, false));
+        cmd.envs(get_cargo_envs(args, &target_triple));
 
         cmd.spawn()
             .map_err(|_| Error::CargoBuildFailed)?
@@ -562,16 +569,10 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     // Run `cargo build` with json output and collect it.
     // This would not cause a rebuild.
     let cmd = &mut Command::new("cargo");
-    cmd.args(&get_cargo_args(args, true));
+    cmd.args(get_cargo_args(args, true));
+    cmd.envs(get_cargo_envs(args, &target_triple));
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::null());
-
-    // When targeting MSVC, symbols data will be stored in PDB files.
-    // But unlike other targets, the Release build would not have any useful information.
-    // Therefore we have to force debug info in Release mode for MSVC target.
-    if args.release && target_triple.contains("msvc") {
-        cmd.env("CARGO_PROFILE_RELEASE_DEBUG", "true");
-    }
 
     let child = cmd.spawn().map_err(|_| Error::CargoBuildFailed)?;
 
@@ -678,6 +679,30 @@ fn process_crate(args: &Args) -> Result<CrateData, Error> {
     }
 
     Err(Error::UnsupportedCrateType)
+}
+
+fn get_cargo_envs(
+    args: &Args,
+    target_triple: &str
+) -> Vec<(impl AsRef<OsStr>, impl AsRef<OsStr>)> {
+    let mut list = Vec::new();
+
+    let profile = args.get_profile()
+        .to_ascii_uppercase()
+        .replace('-', "_");
+
+    // No matter which profile we are building for, never strip the binary
+    // because we need the symbols.
+    list.push((format!("CARGO_PROFILE_{}_STRIP", profile), "false"));
+
+    // When targeting MSVC, symbols data will be stored in PDB files.
+    // Because of that, the Release build would not have any useful information
+    // even if not stripped. Therefore, force the debug info for MSVC target.
+    if target_triple.contains("msvc") {
+        list.push((format!("CARGO_PROFILE_{}_DEBUG", profile), "true"));
+    }
+
+    list
 }
 
 #[allow(clippy::vec_init_then_push)]
