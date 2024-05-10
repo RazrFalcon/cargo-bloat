@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.1] - 2024-05-10
+### Added
+- Improve `strip = false` handling. Strip is always disabled for `cargo bloat` builds now.
+  Thanks to [@intelfx](https://github.com/intelfx).
+
 ## [0.12.0] - 2024-04-14
 ### Added
 - The `--config` flag. That matches the `cargo build --config`.
